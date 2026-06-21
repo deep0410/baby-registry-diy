@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       url: String(body.url || ""),
       imageUrl: body.imageUrl ? String(body.imageUrl) : undefined,
       imageKey: body.imageKey ? String(body.imageKey) : undefined,
+      price: body.price !== undefined ? String(body.price) : undefined,
       quantity: Number(body.quantity || 1),
     });
     return NextResponse.json({ ok: true, id });

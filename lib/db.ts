@@ -34,6 +34,7 @@ interface MetaRecord {
   url: string;
   imageUrl: string;
   imageKey?: string;
+  price?: string;
   quantity: number;
   archived: boolean;
   createdAt: string;
@@ -98,6 +99,7 @@ export async function getPublicItems(): Promise<PublicItem[]> {
         name: m.name,
         url: m.url,
         imageUrl: resolveImage(m),
+        price: m.price || "",
         quantity: m.quantity,
         remaining,
         taken,
@@ -133,6 +135,7 @@ export async function getAdminItems(): Promise<AdminItem[]> {
         url: m.url,
         imageUrl: resolveImage(m),
         imageKey: m.imageKey,
+        price: m.price || "",
         quantity: m.quantity,
         remaining: Math.max(0, m.quantity - taken),
         claimed: claimSlots.length,
@@ -156,6 +159,7 @@ export async function createItem(data: {
   url: string;
   imageUrl?: string;
   imageKey?: string;
+  price?: string;
   quantity: number;
 }): Promise<string> {
   const id = randomUUID();
@@ -168,6 +172,7 @@ export async function createItem(data: {
     url: data.url.trim(),
     imageUrl: (data.imageUrl || "").trim(),
     imageKey: data.imageKey,
+    price: (data.price || "").trim(),
     quantity: Math.max(1, Math.floor(data.quantity || 1)),
     archived: false,
     createdAt: new Date().toISOString(),
@@ -183,6 +188,7 @@ export async function updateItem(
     url: string;
     imageUrl: string;
     imageKey: string;
+    price: string;
     quantity: number;
     archived: boolean;
   }>
@@ -199,6 +205,7 @@ export async function updateItem(
   if (data.url !== undefined) put("url", data.url.trim());
   if (data.imageUrl !== undefined) put("imageUrl", data.imageUrl.trim());
   if (data.imageKey !== undefined) put("imageKey", data.imageKey);
+  if (data.price !== undefined) put("price", data.price.trim());
   if (data.quantity !== undefined) put("quantity", Math.max(1, Math.floor(data.quantity)));
   if (data.archived !== undefined) put("archived", data.archived);
   if (sets.length === 0) return;

@@ -14,10 +14,22 @@ interface TrayEntry {
 export default function RegistryClient({
   title,
   subtitle,
+  taxMultiplier = 1.13,
 }: {
   title: string;
   subtitle: string;
+  taxMultiplier?: number;
 }) {
+  const showTax = Math.abs(taxMultiplier - 1) > 0.001;
+  // Apply the tax multiplier to a display price like "$129.99" / "CA$49.99".
+  const withTax = (price: string): string => {
+    if (!price) return "";
+    const m = price.match(/^([^\d]*)([\d.,]+)(.*)$/);
+    if (!m) return price;
+    const num = parseFloat(m[2].replace(/,/g, ""));
+    if (!isFinite(num)) return price;
+    return `${m[1]}${(num * taxMultiplier).toFixed(2)}`;
+  };
   const [items, setItems] = useState<PublicItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tray, setTray] = useState<TrayEntry[]>([]);
@@ -208,13 +220,21 @@ export default function RegistryClient({
                 </div>
                 <div className="card-body">
                   <div className="card-title">{item.name}</div>
-                  {item.url ? (
-                    <a className="link-out" href={item.url} target="_blank" rel="noreferrer">
-                      View item ↗
-                    </a>
-                  ) : (
-                    <span className="card-meta">&nbsp;</span>
-                  )}
+                  <div className="card-price-row">
+                    {item.price ? (
+                      <span className="price">
+                        {withTax(item.price)}
+                        {showTax && <span className="tax-note">incl. tax</span>}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    {item.url && (
+                      <a className="link-out" href={item.url} target="_blank" rel="noreferrer">
+                        View item ↗
+                      </a>
+                    )}
+                  </div>
                   <div className="card-actions">
                     {selected ? (
                       <button className="btn ghost small block" disabled>

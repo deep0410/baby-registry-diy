@@ -14,6 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       url: body.url,
       imageUrl: body.imageUrl,
       imageKey: body.imageKey,
+      price: body.price,
       quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
       archived: body.archived,
     });

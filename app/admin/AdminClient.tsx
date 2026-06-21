@@ -8,11 +8,12 @@ interface FormState {
   name: string;
   url: string;
   quantity: number;
+  price: string;
   imageUrl: string;
   imageKey: string;
 }
 
-const emptyForm: FormState = { name: "", url: "", quantity: 1, imageUrl: "", imageKey: "" };
+const emptyForm: FormState = { name: "", url: "", quantity: 1, price: "", imageUrl: "", imageKey: "" };
 
 export default function AdminClient() {
   const router = useRouter();
@@ -64,15 +65,32 @@ export default function AdminClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: form.url }),
       });
-      const data = await res.json();
-      if (data.imageUrl) {
-        setForm((f) => ({ ...f, imageUrl: data.imageUrl, imageKey: "" }));
-        flash("Photo found from the link ✨");
+      const data = await res.json(); // { imageUrl, price, title }
+      const got: string[] = [];
+      setForm((f) => {
+        const next = { ...f };
+        if (data.imageUrl) {
+          next.imageUrl = data.imageUrl;
+          next.imageKey = "";
+          got.push("photo");
+        }
+        if (data.price) {
+          next.price = data.price;
+          got.push("price");
+        }
+        if (data.title && !f.name.trim()) {
+          next.name = data.title;
+          got.push("name");
+        }
+        return next;
+      });
+      if (got.length) {
+        flash(`Pulled ${got.join(", ")} from the link ✨`);
       } else {
-        flash("Couldn’t find a photo on that page — paste a URL or upload instead.");
+        flash("Couldn’t read that page (some stores block bots) — add details manually.");
       }
     } catch {
-      flash("Photo fetch failed.");
+      flash("Couldn’t read that link.");
     } finally {
       setFetchingOg(false);
     }
@@ -118,6 +136,7 @@ export default function AdminClient() {
         name: form.name,
         url: form.url,
         quantity: form.quantity,
+        price: form.price,
         imageUrl: form.imageUrl,
         imageKey: form.imageKey,
       };
@@ -151,6 +170,7 @@ export default function AdminClient() {
       name: it.name,
       url: it.url,
       quantity: it.quantity,
+      price: it.price || "",
       imageUrl: it.imageKey ? "" : it.imageUrl,
       imageKey: it.imageKey || "",
     });
@@ -224,12 +244,27 @@ export default function AdminClient() {
             />
           </div>
         </div>
-        <label>Product link</label>
-        <input
-          value={form.url}
-          onChange={(e) => setForm({ ...form, url: e.target.value })}
-          placeholder="https://www.amazon.com/..."
-        />
+        <div className="row">
+          <div>
+            <label>Product link</label>
+            <input
+              value={form.url}
+              onChange={(e) => setForm({ ...form, url: e.target.value })}
+              placeholder="https://www.amazon.com/..."
+            />
+          </div>
+          <div style={{ flex: "0 0 140px" }}>
+            <label>Price</label>
+            <input
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: e.target.value })}
+              placeholder="$0.00"
+            />
+          </div>
+        </div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          Tip: paste the link, then use “Auto-fill from link” to grab the photo, price, and name.
+        </p>
 
         <label>Photo</label>
         <div className="row" style={{ alignItems: "flex-start" }}>
@@ -241,7 +276,7 @@ export default function AdminClient() {
             />
             <div className="adm-actions">
               <button className="btn ghost small" onClick={autoFetchPhoto} disabled={fetchingOg} type="button">
-                {fetchingOg ? "Fetching…" : "Auto-fetch from link"}
+                {fetchingOg ? "Reading link…" : "Auto-fill from link"}
               </button>
               <label
                 className="btn ghost small"
@@ -296,7 +331,10 @@ export default function AdminClient() {
                 <div className="adm-thumb" />
               )}
               <div className="adm-main">
-                <div className="adm-name">{it.name}</div>
+                <div className="adm-name">
+                  {it.name}
+                  {it.price && <span style={{ color: "var(--accent-deep)", marginLeft: 8 }}>{it.price}</span>}
+                </div>
                 <div style={{ margin: "6px 0" }}>
                   <span className="pill green">{it.claimed} purchased</span>
                   <span className="pill rose">{it.remaining} needed</span>

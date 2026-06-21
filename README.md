@@ -101,6 +101,7 @@ VISIBILITY=private ./scripts/publish.sh my-registry
 | `AWS_SECRET_ACCESS_KEY` | From the scoped IAM user |
 | `NEXT_PUBLIC_REGISTRY_TITLE` | Header title, e.g. `Baby Smith` |
 | `NEXT_PUBLIC_REGISTRY_SUBTITLE` | e.g. `We're having a baby!` |
+| `NEXT_PUBLIC_TAX_MULTIPLIER` | Tax applied to displayed prices; `1.13` = 13%, `1` = none |
 
 `scripts/setup-aws.sh` fills all of these in for you.
 
@@ -108,12 +109,17 @@ VISIBILITY=private ./scripts/publish.sh my-registry
 
 ## Adding items (admin)
 
-For each item's photo you have three options, easiest first:
+Paste the product link and click **Auto-fill from link** — it pulls the **photo, price,
+and name** from the page (via Open Graph / JSON-LD / retailer-specific parsing) so guests
+can see the price before deciding. Every field stays editable, and for the photo you can
+also:
 
-1. **Auto-fetch from link** — paste the product URL and click the button; it pulls the
-   store's preview image. Works for most major retailers.
-2. **Paste an image URL** directly.
-3. **Upload a photo** — stored in your private S3 bucket, served via signed URLs.
+- **Paste an image URL** directly, or
+- **Upload a photo** — stored in your private S3 bucket, served via signed URLs.
+
+Note: a few big retailers (Amazon especially) sometimes serve a bot-check page to servers,
+so auto-fill may come back empty. When that happens, just type the price and paste an image
+URL or upload one — takes a few seconds.
 
 ---
 

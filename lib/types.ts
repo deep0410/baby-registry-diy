@@ -15,6 +15,7 @@ export interface PublicItem {
   name: string;
   url: string;
   imageUrl: string; // resolved url the browser can load
+  price: string; // display-ready, e.g. "$129.99" (may be empty)
   quantity: number;
   remaining: number; // units still needed
   taken: number; // units claimed or on active hold
@@ -28,6 +29,7 @@ export interface AdminItem {
   url: string;
   imageUrl: string;
   imageKey?: string;
+  price: string;
   quantity: number;
   remaining: number;
   claimed: number; // confirmed purchases
