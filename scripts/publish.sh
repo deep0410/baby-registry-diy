@@ -18,6 +18,9 @@ command -v git >/dev/null 2>&1 || { echo "❌ git not found."; exit 1; }
 command -v gh  >/dev/null 2>&1 || { echo "❌ GitHub CLI not found. Install: https://cli.github.com"; exit 1; }
 gh auth status >/dev/null 2>&1 || { echo "❌ Not signed in. Run: gh auth login"; exit 1; }
 
+# Clear stale git locks (some synced/mounted filesystems leave these behind)
+rm -f .git/index.lock .git/HEAD.lock .git/objects/*/tmp_obj_* 2>/dev/null || true
+
 # Safety: never publish a real .env.local
 if git check-ignore -q .env.local 2>/dev/null; then :; else
   echo "⚠️  .env.local is not gitignored — aborting to avoid leaking secrets."; exit 1
