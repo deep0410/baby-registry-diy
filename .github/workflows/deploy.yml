@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+env:
+  VERCEL_ORG_ID: team_MHD46RL0LT4nJdoG3MAwvr2V
+  VERCEL_PROJECT_ID: prj_RYxiMAWdCBJ5dG17i78HnuINa9cM
+
 jobs:
   deploy:
     name: Deploy
