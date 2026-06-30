@@ -12,7 +12,8 @@ import {
 import type { AdminItem, Claim, PublicItem, ReserveResult } from "./types";
 
 const TABLE = process.env.DYNAMODB_TABLE || "baby-registry";
-const HOLD_TTL_SECONDS = 10 * 60; // a hold lasts 10 minutes
+// Hold duration in seconds — configurable via HOLD_TTL_SECONDS env var (default 30 min).
+const HOLD_TTL_SECONDS = parseInt(process.env.HOLD_TTL_SECONDS || "1800", 10);
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" });
 const ddb = DynamoDBDocumentClient.from(client, {

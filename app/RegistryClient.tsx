@@ -43,7 +43,7 @@ export default function RegistryClient({
   const [done, setDone] = useState(false);
   const session = useRef<string>("");
 
-  // Stable session id for hold ownership.
+  // Restore session + tray from localStorage so holds survive a refresh or tab close.
   useEffect(() => {
     let s = "";
     try {
@@ -52,11 +52,24 @@ export default function RegistryClient({
         s = crypto.randomUUID();
         localStorage.setItem("registry_session", s);
       }
+      const saved = localStorage.getItem("registry_tray");
+      if (saved) setTray(JSON.parse(saved));
     } catch {
       s = Math.random().toString(36).slice(2);
     }
     session.current = s;
   }, []);
+
+  // Keep tray in sync with localStorage on every change.
+  useEffect(() => {
+    try {
+      if (tray.length > 0) {
+        localStorage.setItem("registry_tray", JSON.stringify(tray));
+      } else {
+        localStorage.removeItem("registry_tray");
+      }
+    } catch {}
+  }, [tray]);
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -151,7 +164,7 @@ export default function RegistryClient({
       const data = await res.json();
       if (data.ok) {
         setDone(true);
-        setTray([]);
+        setTray([]); // also clears localStorage via the tray useEffect
         setCheckoutOpen(false);
         setDrawerOpen(false);
         load();
