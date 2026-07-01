@@ -102,10 +102,14 @@ export default function RegistryClient({
         .then((r) => r.json())
         .then(({ valid }) => {
           if (!Array.isArray(valid)) return;
-          const validKeys = new Set(valid.map((v: { id: string; slot: number }) => `${v.id}:${v.slot}`));
+          const validKeys = new Set(
+            valid.map((v: { id: string; slot: number }) => `${v.id}:${v.slot}`),
+          );
           setTray((t) => t.filter((e) => validKeys.has(`${e.id}:${e.slot}`)));
         })
-        .catch(() => { /* ignore transient errors */ });
+        .catch(() => {
+          /* ignore transient errors */
+        });
       return currentTray; // no immediate change — async update above handles it
     });
   }, []);
@@ -144,17 +148,21 @@ export default function RegistryClient({
         .then((r) => r.json())
         .then(({ valid }) => {
           if (!Array.isArray(valid)) return;
-          const validKeys = new Set(valid.map((v: { id: string; slot: number }) => `${v.id}:${v.slot}`));
+          const validKeys = new Set(
+            valid.map((v: { id: string; slot: number }) => `${v.id}:${v.slot}`),
+          );
           setTray((t) => t.filter((e) => validKeys.has(`${e.id}:${e.slot}`)));
         })
-        .catch(() => { /* ignore transient errors */ });
+        .catch(() => {
+          /* ignore transient errors */
+        });
       return currentTray;
     });
   }, []);
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 6000);
+    const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -178,7 +186,13 @@ export default function RegistryClient({
       if (data.ok && data.slot !== undefined) {
         setTray((prev) => [
           ...prev,
-          { id: item.id, slot: data.slot, name: item.name, imageUrl: item.imageUrl, url: item.url },
+          {
+            id: item.id,
+            slot: data.slot,
+            name: item.name,
+            imageUrl: item.imageUrl,
+            url: item.url,
+          },
         ]);
         flash(`Added “${item.name}” to your gifts`);
         load();
@@ -194,12 +208,18 @@ export default function RegistryClient({
   };
 
   const removeFromGifts = async (entry: TrayEntry) => {
-    setTray((prev) => prev.filter((t) => !(t.id === entry.id && t.slot === entry.slot)));
+    setTray((prev) =>
+      prev.filter((t) => !(t.id === entry.id && t.slot === entry.slot)),
+    );
     try {
       await fetch("/api/release", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: entry.id, slot: entry.slot, session: session.current }),
+        body: JSON.stringify({
+          id: entry.id,
+          slot: entry.slot,
+          session: session.current,
+        }),
       });
     } catch {
       /* hold will expire on its own */
@@ -234,7 +254,9 @@ export default function RegistryClient({
       } else if (Array.isArray(data.confirmed)) {
         const confirmed = new Set(data.confirmed);
         setTray((prev) => prev.filter((t) => !confirmed.has(t.id)));
-        flash("Some items were just taken by someone else. The rest are confirmed!");
+        flash(
+          "Some items were just taken by someone else. The rest are confirmed!",
+        );
         load();
       } else {
         flash(data.error || "Something went wrong. Please try again.");
@@ -253,8 +275,8 @@ export default function RegistryClient({
         <h1>{title}</h1>
         <p>{subtitle}</p>
         <p className="note">
-          Thank you for celebrating with us. Add the gifts you’d like to give to your list,
-          then confirm — we’ll keep track so nothing is doubled up.
+          Thank you for celebrating with us. Add the gifts you’d like to give to
+          your list, then confirm — we’ll keep track so nothing is doubled up.
         </p>
       </header>
 
@@ -268,7 +290,9 @@ export default function RegistryClient({
       {loading ? (
         <div className="empty">Loading the registry…</div>
       ) : items.length === 0 ? (
-        <div className="empty">No items have been added yet. Check back soon! 🍼</div>
+        <div className="empty">
+          No items have been added yet. Check back soon! 🍼
+        </div>
       ) : (
         <div className="grid">
           {items.map((item) => {
@@ -306,7 +330,12 @@ export default function RegistryClient({
                       <span />
                     )}
                     {item.url && (
-                      <a className="link-out" href={item.url} target="_blank" rel="noreferrer">
+                      <a
+                        className="link-out"
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         View item ↗
                       </a>
                     )}
@@ -355,13 +384,17 @@ export default function RegistryClient({
                       <div className="ti-thumb" />
                     )}
                     <div className="ti-name">{t.name}</div>
-                    <button className="ti-remove" onClick={() => removeFromGifts(t)}>
+                    <button
+                      className="ti-remove"
+                      onClick={() => removeFromGifts(t)}
+                    >
                       Remove
                     </button>
                   </div>
                 ))}
                 <p className="muted" style={{ marginTop: 16 }}>
-                  These are held for you while you finish. Confirm to let the family know.
+                  These are held for you while you finish. Confirm to let the
+                  family know.
                 </p>
                 <button
                   className="btn block"
@@ -388,15 +421,23 @@ export default function RegistryClient({
 
       {/* Checkout modal */}
       {checkoutOpen && (
-        <div className="overlay modal-center" onClick={() => setCheckoutOpen(false)}>
+        <div
+          className="overlay modal-center"
+          onClick={() => setCheckoutOpen(false)}
+        >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h2>Almost done 💝</h2>
             <p className="muted">
-              You’re gifting {tray.length} {tray.length === 1 ? "item" : "items"}. Leave your
-              name and a note for the family.
+              You’re gifting {tray.length}{" "}
+              {tray.length === 1 ? "item" : "items"}. Leave your name and a note
+              for the family.
             </p>
             <label>Your name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Aunt Priya" />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Aunt Priya"
+            />
             <label>Message (optional)</label>
             <textarea
               value={message}
@@ -422,8 +463,8 @@ export default function RegistryClient({
               Back
             </button>
             <p className="muted center" style={{ marginTop: 14, fontSize: 12 }}>
-              Remember to actually purchase the item from the store link. This list just
-              prevents duplicate gifts.
+              Remember to actually purchase the item from the store link. This
+              list just prevents duplicate gifts.
             </p>
           </div>
         </div>
@@ -435,10 +476,14 @@ export default function RegistryClient({
           <div className="modal center" onClick={(e) => e.stopPropagation()}>
             <h2>Thank you! 🤍</h2>
             <p className="muted">
-              Your gifts are confirmed. The family will be so grateful. Don’t forget to
-              complete your purchase from the store links!
+              Your gifts are confirmed. The family will be so grateful. Don’t
+              forget to complete your purchase from the store links!
             </p>
-            <button className="btn block" style={{ marginTop: 16 }} onClick={() => setDone(false)}>
+            <button
+              className="btn block"
+              style={{ marginTop: 16 }}
+              onClick={() => setDone(false)}
+            >
               Back to registry
             </button>
           </div>
