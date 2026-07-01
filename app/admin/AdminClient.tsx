@@ -39,6 +39,7 @@ export default function AdminClient() {
 
   // Bulk-import form
   const [bulkLinks, setBulkLinks] = useState("");
+  const [bulkJsonError, setBulkJsonError] = useState<string | null>(null);
   const [bulkResults, setBulkResults] = useState<BulkResult[]>([]);
   const [bulkRunning, setBulkRunning] = useState(false);
 
@@ -70,6 +71,7 @@ export default function AdminClient() {
     }
     if (mode === "bulk") {
       setBulkResults([]);
+      setBulkJsonError(null);
     }
   };
 
@@ -170,19 +172,41 @@ export default function AdminClient() {
 
   // ── Bulk import ──────────────────────────────────────────────────────────
 
+  const formatBulkJson = () => {
+    try {
+      const parsed = JSON.parse(bulkLinks.trim());
+      setBulkLinks(JSON.stringify(parsed, null, 2));
+      setBulkJsonError(null);
+    } catch (e: any) {
+      setBulkJsonError(e?.message || "Invalid JSON");
+    }
+  };
+
   const runBulkImport = async () => {
-    const links = bulkLinks
-      .split(/[\n,]+/)
-      .map((l) => l.trim().replace(/^["'\[]+|["'\]]+$/g, "").trim())
-      .filter((l) => l.startsWith("http"));
+    setBulkJsonError(null);
 
-    if (links.length === 0) return flash("No valid URLs found.");
+    let entries: { link: string; quantity: number }[] = [];
+    try {
+      const parsed = JSON.parse(bulkLinks.trim());
+      if (!Array.isArray(parsed)) throw new Error("Expected a JSON array [ … ]");
+      entries = parsed
+        .filter((e: any) => typeof e?.link === "string" && e.link.trim().startsWith("http"))
+        .map((e: any) => ({
+          link: e.link.trim(),
+          quantity: Math.max(1, parseInt(String(e.quantity ?? 1), 10) || 1),
+        }));
+    } catch (e: any) {
+      setBulkJsonError(e?.message || "Invalid JSON");
+      return;
+    }
 
-    setBulkResults(links.map((url) => ({ url, status: "pending" })));
+    if (entries.length === 0) return flash("No valid links found in the JSON.");
+
+    setBulkResults(entries.map(({ link }) => ({ url: link, status: "pending" })));
     setBulkRunning(true);
 
-    for (let i = 0; i < links.length; i++) {
-      const url = links[i];
+    for (let i = 0; i < entries.length; i++) {
+      const { link, quantity } = entries[i];
       setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "fetching" } : r));
 
       try {
@@ -190,25 +214,25 @@ export default function AdminClient() {
         const ogRes = await fetch("/api/admin/og", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ url: link }),
         });
         const og = await ogRes.json();
 
-        // 2. Save item
+        // 2. Save item with quantity from JSON
         const saveRes = await fetch("/api/admin/items", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: og.title || url,
-            url,
+            name: og.title || link,
+            url: link,
             imageUrl: og.imageUrl || "",
             price: og.price || "",
-            quantity: 1,
+            quantity,
           }),
         });
 
         if (saveRes.ok) {
-          setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "done", name: og.title || url } : r));
+          setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "done", name: og.title || link } : r));
         } else {
           const d = await saveRes.json();
           setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "error", error: d.error || "Save failed" } : r));
@@ -349,23 +373,29 @@ export default function AdminClient() {
         <div className="panel">
           <h3>Bulk add items</h3>
           <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-            Paste links one per line, or as a comma-separated list. The registry will auto-fill the name, price, and photo from each link. You can edit any item afterwards.
+            Paste a JSON array — each entry needs a <code>link</code> and optional <code>quantity</code>. Name, price, and photo are auto-filled from the link. You can edit any item afterwards.
           </p>
-          <label>Product links</label>
+          <label>Items JSON</label>
           <textarea
-            rows={8}
-            style={{ width: "100%", fontFamily: "monospace", fontSize: 12, resize: "vertical" }}
+            rows={10}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: 12, resize: "vertical", border: bulkJsonError ? "1.5px solid #c0392b" : undefined }}
             value={bulkLinks}
-            onChange={(e) => { setBulkLinks(e.target.value); setBulkResults([]); }}
-            placeholder={`https://www.amazon.ca/dp/B08WG37722\nhttps://www.ikea.com/ca/en/p/...\nhttps://www.walmart.ca/en/ip/...`}
+            onChange={(e) => { setBulkLinks(e.target.value); setBulkResults([]); setBulkJsonError(null); }}
+            placeholder={`[\n  { "link": "https://www.amazon.ca/dp/...", "quantity": 1 },\n  { "link": "https://www.walmart.ca/en/ip/...", "quantity": 2 },\n  { "link": "https://www.ikea.com/ca/en/p/...", "quantity": 1 }\n]`}
             disabled={bulkRunning}
           />
+          {bulkJsonError && (
+            <p style={{ fontSize: 12, color: "#c0392b", marginTop: 4 }}>⚠ {bulkJsonError}</p>
+          )}
           <div className="adm-actions" style={{ marginTop: 12 }}>
             <button className="btn" onClick={runBulkImport} disabled={bulkRunning || !bulkLinks.trim()}>
               {bulkRunning ? "Importing…" : "Import all"}
             </button>
+            <button className="btn ghost" onClick={formatBulkJson} disabled={bulkRunning || !bulkLinks.trim()} type="button">
+              Format JSON
+            </button>
             {bulkResults.length > 0 && !bulkRunning && (
-              <button className="btn ghost" onClick={() => { setBulkLinks(""); setBulkResults([]); }}>
+              <button className="btn ghost" onClick={() => { setBulkLinks(""); setBulkResults([]); setBulkJsonError(null); }}>
                 Clear
               </button>
             )}
