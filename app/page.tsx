@@ -9,6 +9,7 @@ export default function Home() {
       title={process.env.NEXT_PUBLIC_REGISTRY_TITLE || "Baby Patel"}
       subtitle={process.env.NEXT_PUBLIC_REGISTRY_SUBTITLE || "We're having a baby!"}
       taxMultiplier={Number.isFinite(tax) && tax > 0 ? tax : 1.13}
+      houseAddress={process.env.HOUSE_ADDRESS || ""}
     />
   );
 }

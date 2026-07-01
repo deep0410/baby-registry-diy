@@ -15,6 +15,8 @@ interface FormState {
 
 interface BulkResult {
   url: string;
+  quantity?: number;
+  nameOverride?: string;
   status: "pending" | "fetching" | "done" | "error";
   name?: string;
   error?: string;
@@ -185,7 +187,7 @@ export default function AdminClient() {
   const runBulkImport = async () => {
     setBulkJsonError(null);
 
-    let entries: { link: string; quantity: number }[] = [];
+    let entries: { link: string; quantity: number; name: string }[] = [];
     try {
       const parsed = JSON.parse(bulkLinks.trim());
       if (!Array.isArray(parsed)) throw new Error("Expected a JSON array [ … ]");
@@ -194,6 +196,7 @@ export default function AdminClient() {
         .map((e: any) => ({
           link: e.link.trim(),
           quantity: Math.max(1, parseInt(String(e.quantity ?? 1), 10) || 1),
+          name: typeof e.name === "string" ? e.name.trim() : "",
         }));
     } catch (e: any) {
       setBulkJsonError(e?.message || "Invalid JSON");
@@ -202,11 +205,11 @@ export default function AdminClient() {
 
     if (entries.length === 0) return flash("No valid links found in the JSON.");
 
-    setBulkResults(entries.map(({ link }) => ({ url: link, status: "pending" })));
+    setBulkResults(entries.map(({ link, quantity, name }) => ({ url: link, quantity, nameOverride: name || undefined, status: "pending" })));
     setBulkRunning(true);
 
     for (let i = 0; i < entries.length; i++) {
-      const { link, quantity } = entries[i];
+      const { link, quantity, name: nameOverride } = entries[i];
       setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "fetching" } : r));
 
       try {
@@ -218,12 +221,13 @@ export default function AdminClient() {
         });
         const og = await ogRes.json();
 
-        // 2. Save item with quantity from JSON
+        // 2. Save item — prefer name from JSON, fall back to OG title
+        const resolvedName = nameOverride || og.title || link;
         const saveRes = await fetch("/api/admin/items", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: og.title || link,
+            name: resolvedName,
             url: link,
             imageUrl: og.imageUrl || "",
             price: og.price || "",
@@ -232,7 +236,7 @@ export default function AdminClient() {
         });
 
         if (saveRes.ok) {
-          setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "done", name: og.title || link } : r));
+          setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "done", name: resolvedName } : r));
         } else {
           const d = await saveRes.json();
           setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "error", error: d.error || "Save failed" } : r));
@@ -373,7 +377,7 @@ export default function AdminClient() {
         <div className="panel">
           <h3>Bulk add items</h3>
           <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-            Paste a JSON array — each entry needs a <code>link</code> and optional <code>quantity</code>. Name, price, and photo are auto-filled from the link. You can edit any item afterwards.
+            Paste a JSON array. Required: <code>link</code>. Optional: <code>quantity</code> (default 1) and <code>name</code> (skips scraping if provided). Price and photo are always auto-filled from the link.
           </p>
           <label>Items JSON</label>
           <textarea
@@ -381,7 +385,7 @@ export default function AdminClient() {
             style={{ width: "100%", fontFamily: "monospace", fontSize: 12, resize: "vertical", border: bulkJsonError ? "1.5px solid #c0392b" : undefined }}
             value={bulkLinks}
             onChange={(e) => { setBulkLinks(e.target.value); setBulkResults([]); setBulkJsonError(null); }}
-            placeholder={`[\n  { "link": "https://www.amazon.ca/dp/...", "quantity": 1 },\n  { "link": "https://www.walmart.ca/en/ip/...", "quantity": 2 },\n  { "link": "https://www.ikea.com/ca/en/p/...", "quantity": 1 }\n]`}
+            placeholder={`[\n  { "link": "https://www.amazon.ca/dp/...", "quantity": 1 },\n  { "link": "https://www.walmart.ca/en/ip/...", "quantity": 2, "name": "JOIE Ayr Stroller" },\n  { "link": "https://www.ikea.com/ca/en/p/...", "quantity": 1 }\n]`}
             disabled={bulkRunning}
           />
           {bulkJsonError && (
@@ -418,9 +422,21 @@ export default function AdminClient() {
                     {r.status === "error"    && "✗"}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {r.name
-                      ? <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div>
-                      : <div style={{ fontSize: 11, color: "var(--muted)", wordBreak: "break-all" }}>{r.url}</div>}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      {r.name
+                        ? <span style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</span>
+                        : <span style={{ fontSize: 11, color: "var(--muted)", wordBreak: "break-all" }}>{r.url}</span>}
+                      {(r.quantity ?? 1) > 1 && (
+                        <span style={{ fontSize: 10, background: "var(--accent, #e8d5c4)", borderRadius: 4, padding: "1px 6px" }}>
+                          qty {r.quantity}
+                        </span>
+                      )}
+                      {r.nameOverride && (
+                        <span style={{ fontSize: 10, background: "#d5e8d4", borderRadius: 4, padding: "1px 6px" }}>
+                          name set
+                        </span>
+                      )}
+                    </div>
                     {r.status === "fetching" && <div style={{ fontSize: 11, color: "var(--muted)" }}>Fetching…</div>}
                     {r.status === "error"    && <div style={{ fontSize: 11, color: "#c0392b" }}>{r.error}</div>}
                     {r.status === "done"     && <div style={{ fontSize: 11, color: "var(--muted)", wordBreak: "break-all" }}>{r.url}</div>}
