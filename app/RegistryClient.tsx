@@ -11,6 +11,16 @@ interface TrayEntry {
   url: string;
 }
 
+// How long, in words, we tell the guest their items are held. This should match
+// HOLD_TTL_SECONDS on the server (5400s = 1h30m).
+const HOLD_LABEL = "1 hour and 30 minutes";
+
+const STEP_LABELS: Record<number, string> = {
+  1: "Select",
+  2: "Reserve & buy",
+  3: "Confirm",
+};
+
 export default function RegistryClient({
   title,
   subtitle,
@@ -32,22 +42,28 @@ export default function RegistryClient({
     if (!isFinite(num)) return price;
     return `${m[1]}${(num * taxMultiplier).toFixed(2)}`;
   };
+
   const [items, setItems] = useState<PublicItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tray, setTray] = useState<TrayEntry[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [selectedRetailers, setSelectedRetailers] = useState<Set<string>>(new Set());
+
+  // Wizard state
+  const [step, setStep] = useState(1); // 1 = select, 2 = reserve & buy, 3 = confirm
+  const [showIntro, setShowIntro] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
   const session = useRef<string>("");
 
-  // Restore session + tray from localStorage so holds survive a refresh or tab close.
+  // Restore session + tray (localStorage: survive tab close so holds persist),
+  // and intro-seen + current step (sessionStorage: reset each new session, but
+  // survive a refresh so we can drop the guest back where they were).
   useEffect(() => {
     let s = "";
     try {
@@ -57,11 +73,23 @@ export default function RegistryClient({
         localStorage.setItem("registry_session", s);
       }
       const saved = localStorage.getItem("registry_tray");
-      if (saved) setTray(JSON.parse(saved));
+      const savedTray: TrayEntry[] = saved ? JSON.parse(saved) : [];
+      if (savedTray.length) setTray(savedTray);
+
+      const introSeen = sessionStorage.getItem("registry_intro_seen") === "1";
+      setShowIntro(!introSeen);
+
+      const savedStep = parseInt(sessionStorage.getItem("registry_step") || "1", 10);
+      let restoredStep = savedStep === 2 || savedStep === 3 ? savedStep : 1;
+      // Can't be on a review/confirm step with nothing held.
+      if (restoredStep > 1 && savedTray.length === 0) restoredStep = 1;
+      setStep(restoredStep);
     } catch {
       s = Math.random().toString(36).slice(2);
+      setShowIntro(true);
     }
     session.current = s;
+    setHydrated(true);
   }, []);
 
   // Keep tray in sync with localStorage on every change.
@@ -75,9 +103,29 @@ export default function RegistryClient({
     } catch {}
   }, [tray]);
 
+  // Persist the current step for this session so a refresh returns here.
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      sessionStorage.setItem("registry_step", String(step));
+    } catch {}
+  }, [step, hydrated]);
+
   const flash = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3200);
+  };
+
+  const dismissIntro = () => {
+    try {
+      sessionStorage.setItem("registry_intro_seen", "1");
+    } catch {}
+    setShowIntro(false);
+  };
+
+  const goToStep = (n: number) => {
+    setStep(n);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // Detect the retailer name + domain from a product URL for favicon + filtering.
@@ -145,6 +193,12 @@ export default function RegistryClient({
     const t = setInterval(load, 15000);
     return () => clearInterval(t);
   }, [load]);
+
+  // If holds expire out from under the guest while they're past step 1, bounce
+  // them back so they can't confirm an empty list.
+  useEffect(() => {
+    if (hydrated && tray.length === 0 && step > 1 && !done) setStep(1);
+  }, [tray.length, step, hydrated, done]);
 
   const inTray = (id: string) => tray.some((t) => t.id === id);
 
@@ -228,8 +282,10 @@ export default function RegistryClient({
       if (data.ok) {
         setDone(true);
         setTray([]); // also clears localStorage via the tray useEffect
-        setCheckoutOpen(false);
-        setDrawerOpen(false);
+        try {
+          sessionStorage.setItem("registry_step", "1");
+        } catch {}
+        setStep(1);
         load();
       } else if (Array.isArray(data.confirmed)) {
         const confirmed = new Set(data.confirmed);
@@ -248,319 +304,301 @@ export default function RegistryClient({
     }
   };
 
+  // ── Stepper ──
+  const Stepper = () => (
+    <div className="stepper">
+      {[1, 2, 3].map((n) => (
+        <div
+          key={n}
+          className={`step-node ${step === n ? "active" : ""} ${step > n ? "done" : ""}`}
+        >
+          <span className="step-num">{step > n ? "✓" : n}</span>
+          <span className="step-lbl">{STEP_LABELS[n]}</span>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="container">
       <header className="site-header">
         <div className="eyebrow">Baby Registry</div>
         <h1>{title}</h1>
         <p>{subtitle}</p>
-        <p className="note">
-          Thank you for celebrating with us. Add the gifts you’d like to give to
-          your list, then confirm — we’ll keep track so nothing is doubled up.
-        </p>
       </header>
 
-      {/* Floating gift tray button */}
-      {tray.length > 0 && (
-        <button className="tray-fab" onClick={() => setDrawerOpen(true)}>
-          My Gifts <span className="count">{tray.length}</span>
-        </button>
-      )}
+      {!done && <Stepper />}
 
-      {loading ? (
-        <div className="empty">Loading the registry…</div>
-      ) : items.length === 0 ? (
-        <div className="empty">
-          No items have been added yet. Check back soon! 🍼
-        </div>
-      ) : (() => {
-        // Unique retailers present in the list (only items with URLs)
-        const retailerMap = new Map<string, string>(); // name → domain
-        items.forEach((item) => {
-          const r = getRetailer(item.url);
-          if (r && !retailerMap.has(r.name)) retailerMap.set(r.name, r.domain);
-        });
-        const retailers = Array.from(retailerMap.entries()); // [[name, domain], …]
+      {/* ─────────────── STEP 1 · Select ─────────────── */}
+      {!done && step === 1 && (
+        <>
+          <p className="step-intro">
+            <strong>Step 1.</strong> Tap “I’ll gift this” on everything you’d like
+            to give. When you’re done, hit <strong>Next</strong>.
+          </p>
 
-        const filteredItems =
-          selectedRetailers.size === 0
-            ? items
-            : items.filter((item) => {
-                const r = getRetailer(item.url);
-                return r && selectedRetailers.has(r.name);
-              });
-
-        return (
-          <>
-            {/* ── Retailer filter chips ── */}
-            {retailers.length > 1 && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
-                <button
-                  className={`btn small${selectedRetailers.size === 0 ? "" : " ghost"}`}
-                  onClick={() => setSelectedRetailers(new Set())}
-                >
-                  All
-                </button>
-                {retailers.map(([name, domain]) => (
-                  <button
-                    key={name}
-                    className={`btn small${selectedRetailers.has(name) ? "" : " ghost"}`}
-                    onClick={() =>
-                      setSelectedRetailers((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(name)) next.delete(name);
-                        else next.add(name);
-                        return next;
-                      })
-                    }
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
-                      alt=""
-                      style={{ marginRight: 6, verticalAlign: "middle", borderRadius: 3, maxWidth: 32, maxHeight: 32, width: 20, height: 20 }}
-                    />
-                    {name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* ── Item grid ── */}
-            <div className="grid">
-              {filteredItems.map((item) => {
-                const selected = inTray(item.id);
-                const unavailable = item.soldOut && !selected;
-                const retailer = getRetailer(item.url);
-                return (
-                  <div
-                    key={item.id}
-                    className={`card ${unavailable ? "taken" : ""} ${selected ? "selected" : ""}`}
-                  >
-                    <div className="thumb" style={{ position: "relative" }}>
-                      {item.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.imageUrl} alt={item.name} loading="lazy" />
-                      ) : (
-                        <span className="placeholder">🎁</span>
-                      )}
-                      {item.soldOut ? (
-                        <span className="badge sold">Reserved</span>
-                      ) : item.quantity > 1 ? (
-                        <span className="badge">
-                          {item.remaining} of {item.quantity} left
-                        </span>
-                      ) : null}
-                      {/* Retailer favicon badge */}
-                      {retailer && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`https://www.google.com/s2/favicons?domain=${retailer.domain}&sz=32`}
-                          alt={retailer.name}
-                          title={retailer.name}
-                          style={{
-                            position: "absolute",
-                            bottom: 6,
-                            right: 6,
-                            borderRadius: 5,
-                            background: "white",
-                            padding: 2,
-                            boxShadow: "0 1px 4px rgba(0,0,0,.18)",
-                            maxWidth: 32,
-                            maxHeight: 32,
-                            width: 24,
-                            height: 24,
-                          }}
-                        />
-                      )}
-                    </div>
-                    <div className="card-body">
-                      <div
-                        className="card-title"
-                        style={{
-                          fontSize: "0.82rem",
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                          lineHeight: 1.35,
-                          minHeight: "2.2em",
-                        }}
-                      >
-                        {item.name}
-                      </div>
-                      <div className="card-price-row">
-                        {item.price ? (
-                          <span className="price">
-                            {withTax(item.price)}
-                            {showTax && <span className="tax-note">incl. tax</span>}
-                          </span>
-                        ) : (
-                          <span />
-                        )}
-                        {item.url && (
-                          <a
-                            className="link-out"
-                            href={item.url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            View ↗
-                          </a>
-                        )}
-                      </div>
-                      <div className="card-actions">
-                        {selected ? (
-                          <button className="btn ghost small block" disabled>
-                            ✓ In your gifts
-                          </button>
-                        ) : unavailable ? (
-                          <button className="btn ghost small block" disabled>
-                            Already reserved
-                          </button>
-                        ) : (
-                          <button
-                            className="btn small block"
-                            disabled={busyId === item.id}
-                            onClick={() => addToGifts(item)}
-                          >
-                            {busyId === item.id ? "Adding…" : "I’ll gift this"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+          {loading ? (
+            <div className="empty">Loading the registry…</div>
+          ) : items.length === 0 ? (
+            <div className="empty">
+              No items have been added yet. Check back soon! 🍼
             </div>
-          </>
-        );
-      })()}
+          ) : (() => {
+            // Unique retailers present in the list (only items with URLs)
+            const retailerMap = new Map<string, string>(); // name → domain
+            items.forEach((item) => {
+              const r = getRetailer(item.url);
+              if (r && !retailerMap.has(r.name)) retailerMap.set(r.name, r.domain);
+            });
+            const retailers = Array.from(retailerMap.entries());
 
-      {/* Gift tray drawer */}
-      {drawerOpen && (
-        <div className="overlay" onClick={() => setDrawerOpen(false)}>
-          <div className="drawer" onClick={(e) => e.stopPropagation()}>
-            <h2>My Gifts</h2>
-            {tray.length === 0 ? (
-              <p className="muted">Your gift list is empty.</p>
-            ) : (
+            const filteredItems =
+              selectedRetailers.size === 0
+                ? items
+                : items.filter((item) => {
+                    const r = getRetailer(item.url);
+                    return r && selectedRetailers.has(r.name);
+                  });
+
+            return (
               <>
-                {tray.map((t) => (
-                  <div className="tray-item" key={`${t.id}-${t.slot}`}>
-                    {t.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="ti-thumb" src={t.imageUrl} alt={t.name} />
-                    ) : (
-                      <div className="ti-thumb" />
-                    )}
-                    <div className="ti-name">{t.name}</div>
+                {/* ── Retailer filter chips ── */}
+                {retailers.length > 1 && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
                     <button
-                      className="ti-remove"
-                      onClick={() => removeFromGifts(t)}
+                      className={`btn small${selectedRetailers.size === 0 ? "" : " ghost"}`}
+                      onClick={() => setSelectedRetailers(new Set())}
                     >
-                      Remove
+                      All
                     </button>
+                    {retailers.map(([rname, domain]) => (
+                      <button
+                        key={rname}
+                        className={`btn small${selectedRetailers.has(rname) ? "" : " ghost"}`}
+                        onClick={() =>
+                          setSelectedRetailers((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(rname)) next.delete(rname);
+                            else next.add(rname);
+                            return next;
+                          })
+                        }
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
+                          alt=""
+                          style={{ marginRight: 6, verticalAlign: "middle", borderRadius: 3, maxWidth: 32, maxHeight: 32, width: 20, height: 20 }}
+                        />
+                        {rname}
+                      </button>
+                    ))}
                   </div>
-                ))}
-                <p className="muted" style={{ marginTop: 16 }}>
-                  These are held for you while you finish. Confirm to let the
-                  family know.
-                </p>
-                <button
-                  className="btn block"
-                  style={{ marginTop: 16 }}
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    setDeliveryOpen(true);
-                  }}
-                >
-                  Confirm {tray.length} {tray.length === 1 ? "gift" : "gifts"}
-                </button>
-                <button
-                  className="btn ghost block"
-                  style={{ marginTop: 8 }}
-                  onClick={() => setDrawerOpen(false)}
-                >
-                  Keep browsing
-                </button>
+                )}
+
+                {/* ── Item grid ── */}
+                <div className="grid">
+                  {filteredItems.map((item) => {
+                    const selected = inTray(item.id);
+                    const unavailable = item.soldOut && !selected;
+                    const retailer = getRetailer(item.url);
+                    return (
+                      <div
+                        key={item.id}
+                        className={`card ${unavailable ? "taken" : ""} ${selected ? "selected" : ""}`}
+                      >
+                        <div className="thumb" style={{ position: "relative" }}>
+                          {selected && <span className="select-check">✓</span>}
+                          {item.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.imageUrl} alt={item.name} loading="lazy" />
+                          ) : (
+                            <span className="placeholder">🎁</span>
+                          )}
+                          {item.soldOut ? (
+                            <span className="badge sold">Reserved</span>
+                          ) : item.quantity > 1 ? (
+                            <span className="badge">
+                              {item.remaining} of {item.quantity} left
+                            </span>
+                          ) : null}
+                          {retailer && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={`https://www.google.com/s2/favicons?domain=${retailer.domain}&sz=32`}
+                              alt={retailer.name}
+                              title={retailer.name}
+                              style={{
+                                position: "absolute",
+                                bottom: 6,
+                                right: 6,
+                                borderRadius: 5,
+                                background: "white",
+                                padding: 2,
+                                boxShadow: "0 1px 4px rgba(0,0,0,.18)",
+                                maxWidth: 32,
+                                maxHeight: 32,
+                                width: 24,
+                                height: 24,
+                              }}
+                            />
+                          )}
+                        </div>
+                        <div className="card-body">
+                          <div
+                            className="card-title"
+                            style={{
+                              fontSize: "0.82rem",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              lineHeight: 1.35,
+                              minHeight: "2.2em",
+                            }}
+                          >
+                            {item.name}
+                          </div>
+                          <div className="card-price-row">
+                            {item.price ? (
+                              <span className="price">
+                                {withTax(item.price)}
+                                {showTax && <span className="tax-note">incl. tax</span>}
+                              </span>
+                            ) : (
+                              <span />
+                            )}
+                            {item.url && (
+                              <a
+                                className="link-out"
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                View ↗
+                              </a>
+                            )}
+                          </div>
+                          <div className="card-actions">
+                            {selected ? (
+                              <button className="btn ghost small block" onClick={() => removeFromGifts(tray.find((t) => t.id === item.id)!)}>
+                                ✓ In your gifts · Remove
+                              </button>
+                            ) : unavailable ? (
+                              <button className="btn ghost small block" disabled>
+                                Already reserved
+                              </button>
+                            ) : (
+                              <button
+                                className="btn small block"
+                                disabled={busyId === item.id}
+                                onClick={() => addToGifts(item)}
+                              >
+                                {busyId === item.id ? "Adding…" : "I’ll gift this"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </>
-            )}
+            );
+          })()}
+
+          {/* Sticky action bar for step 1 */}
+          <div className="actionbar">
+            <div className="ab-info">
+              {tray.length === 0
+                ? "No gifts selected yet"
+                : `${tray.length} ${tray.length === 1 ? "gift" : "gifts"} selected`}
+            </div>
+            <button
+              className="btn"
+              disabled={tray.length === 0}
+              onClick={() => goToStep(2)}
+            >
+              Next →
+            </button>
           </div>
-        </div>
+        </>
       )}
 
-      {/* Delivery instructions modal */}
-      {deliveryOpen && (
-        <div className="overlay modal-center" onClick={() => setDeliveryOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>How to deliver your gift 📦</h2>
+      {/* ─────────────── STEP 2 · Reserve & buy ─────────────── */}
+      {!done && step === 2 && (
+        <div className="wizard">
+          <div className="wizard-card">
+            <div className="eyebrow">Step 2 of 3</div>
+            <h2>We’re holding these for you 🤍</h2>
             <p className="muted">
-              Before confirming, here’s how to get the item to us:
+              Your {tray.length} {tray.length === 1 ? "gift is" : "gifts are"}{" "}
+              reserved so no one else can grab {tray.length === 1 ? "it" : "them"}.
+              We’ll keep {tray.length === 1 ? "it" : "them"} held for{" "}
+              <strong>{HOLD_LABEL}</strong> while you buy{" "}
+              {tray.length === 1 ? "it" : "them"}.
             </p>
 
             {houseAddress && (
-              <div
-                style={{
-                  background: "var(--bg-card, #fdf6f0)",
-                  border: "1.5px solid var(--border)",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  margin: "14px 0",
-                  fontWeight: 700,
-                  fontSize: "1rem",
-                  lineHeight: 1.5,
-                  letterSpacing: "0.01em",
-                }}
-              >
+              <div className="address-box">
+                <div className="address-label">Ship to this address</div>
                 📍 {houseAddress}
               </div>
             )}
 
-            <ol style={{ paddingLeft: 20, margin: "10px 0 18px", lineHeight: 1.85, fontSize: 14 }}>
-              <li>Click <strong>View item ↗</strong> on any card to open the store page.</li>
-              <li>Add the item to your cart and proceed to checkout.</li>
-              <li>
-                Enter the <strong>address above</strong> as the shipping address —
-                most stores ship directly to a gift recipient.
-              </li>
-              <li>
-                If you’re local and prefer a drop-off, reach out to arrange a time
-                before ordering.
-              </li>
+            <ol className="how-to">
+              <li>Open each item at its store using the <strong>View ↗</strong> link below.</li>
+              <li>Add it to your cart and check out.</li>
+              <li>Enter the <strong>address above</strong> as the shipping address.</li>
+              <li>Once you’ve purchased everything, come back and hit <strong>Next</strong>.</li>
             </ol>
 
-            <button
-              className="btn block"
-              style={{ marginTop: 4 }}
-              onClick={() => { setDeliveryOpen(false); setCheckoutOpen(true); }}
-            >
-              Got it — who should we thank? →
+            <div className="held-list">
+              {tray.map((t) => (
+                <div className="tray-item" key={`${t.id}-${t.slot}`}>
+                  {t.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img className="ti-thumb" src={t.imageUrl} alt={t.name} />
+                  ) : (
+                    <div className="ti-thumb" />
+                  )}
+                  <div className="ti-name">{t.name}</div>
+                  <div className="ti-links">
+                    {t.url && (
+                      <a className="link-out" href={t.url} target="_blank" rel="noreferrer">
+                        View ↗
+                      </a>
+                    )}
+                    <button className="ti-remove" onClick={() => removeFromGifts(t)}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button className="btn block" style={{ marginTop: 20 }} onClick={() => goToStep(3)}>
+              I’ve purchased these — Next →
             </button>
-            <button
-              className="btn ghost block"
-              style={{ marginTop: 8 }}
-              onClick={() => { setDeliveryOpen(false); setDrawerOpen(true); }}
-            >
-              Back to my gifts
+            <button className="btn ghost block" style={{ marginTop: 8 }} onClick={() => goToStep(1)}>
+              ← Back to selecting
             </button>
           </div>
         </div>
       )}
 
-      {/* Checkout modal */}
-      {checkoutOpen && (
-        <div
-          className="overlay modal-center"
-          onClick={() => setCheckoutOpen(false)}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Almost done 💝</h2>
+      {/* ─────────────── STEP 3 · Confirm ─────────────── */}
+      {!done && step === 3 && (
+        <div className="wizard">
+          <div className="wizard-card">
+            <div className="eyebrow">Step 3 of 3</div>
+            <h2>Who should we thank? 💝</h2>
             <p className="muted">
-              You’re gifting {tray.length}{" "}
-              {tray.length === 1 ? "item" : "items"}. Leave your name and a note
-              for the family.
+              You’re gifting {tray.length} {tray.length === 1 ? "item" : "items"}.
+              Leave your name so the family knows who to thank, and add a note if
+              you’d like.
             </p>
+
             <label>Your name</label>
             <input
               value={name}
@@ -573,43 +611,90 @@ export default function RegistryClient({
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Can’t wait to meet the little one!"
             />
+
             <button
               className="btn block"
               style={{ marginTop: 18 }}
               disabled={submitting}
               onClick={submit}
             >
-              {submitting ? "Confirming…" : "Confirm my gifts"}
+              {submitting ? "Finishing…" : "Finish 🎉"}
             </button>
             <button
               className="btn ghost block"
               style={{ marginTop: 8 }}
-              onClick={() => {
-                setCheckoutOpen(false);
-                setDeliveryOpen(true);
-              }}
+              onClick={() => goToStep(2)}
             >
-              Back
+              ← Back
             </button>
           </div>
         </div>
       )}
 
-      {/* Thank-you modal */}
+      {/* ─────────────── Thank you ─────────────── */}
       {done && (
-        <div className="overlay modal-center" onClick={() => setDone(false)}>
-          <div className="modal center" onClick={(e) => e.stopPropagation()}>
-            <h2>Thank you! 🤍</h2>
+        <div className="wizard">
+          <div className="wizard-card center">
+            <div style={{ fontSize: 52, marginBottom: 6 }}>🤍</div>
+            <h2>Thank you{name ? `, ${name.split(" ")[0]}` : ""}!</h2>
             <p className="muted">
-              Your gifts are confirmed. The family will be so grateful. Don’t
-              forget to complete your purchase from the store links!
+              Your gifts are confirmed and the family will be so grateful. If you
+              haven’t finished checking out at the store yet, don’t forget to
+              complete your purchase using the store links.
             </p>
             <button
               className="btn block"
-              style={{ marginTop: 16 }}
-              onClick={() => setDone(false)}
+              style={{ marginTop: 18 }}
+              onClick={() => {
+                setDone(false);
+                setName("");
+                setMessage("");
+                goToStep(1);
+              }}
             >
-              Back to registry
+              Back to the registry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────── Intro overlay (first visit this session) ─────────────── */}
+      {showIntro && !done && (
+        <div className="overlay modal-center">
+          <div className="modal intro-modal">
+            <div className="eyebrow">Welcome</div>
+            <h2>How this works</h2>
+            <p className="muted">Gifting takes just three simple steps.</p>
+
+            <ol className="intro-steps">
+              <li>
+                <span className="istep-num">1</span>
+                <div>
+                  <strong>Select your gifts</strong>
+                  <p>Choose the items you’d like to give, then hit Next.</p>
+                </div>
+              </li>
+              <li>
+                <span className="istep-num">2</span>
+                <div>
+                  <strong>Reserve &amp; buy</strong>
+                  <p>
+                    We’ll hold your picks for {HOLD_LABEL} while you purchase them.
+                    Ship them to the address we show you, then come back and hit Next.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <span className="istep-num">3</span>
+                <div>
+                  <strong>Confirm who you are</strong>
+                  <p>Tell us your name so the family can thank you, then hit Finish.</p>
+                </div>
+              </li>
+            </ol>
+
+            <button className="btn block" style={{ marginTop: 8 }} onClick={dismissIntro}>
+              Let’s get started →
             </button>
           </div>
         </div>

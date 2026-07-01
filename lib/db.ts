@@ -107,7 +107,13 @@ export async function getPublicItems(): Promise<PublicItem[]> {
         soldOut: remaining <= 0,
       };
     })
-    .sort((a, b) => Number(a.soldOut) - Number(b.soldOut) || a.name.localeCompare(b.name));
+    .sort((a, b) => {
+      const parsePrice = (p: string) => {
+        const m = p.match(/([\d.,]+)/);
+        return m ? parseFloat(m[1].replace(/,/g, "")) : Infinity;
+      };
+      return parsePrice(a.price) - parsePrice(b.price);
+    });
 }
 
 // ---------- Admin listing ----------
