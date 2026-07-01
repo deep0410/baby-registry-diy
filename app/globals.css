@@ -109,13 +109,25 @@ button { font-family: inherit; cursor: pointer; }
 .actionbar {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 45;
   width: min(620px, calc(100% - 32px));
-  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); border: 1.5px solid var(--line); border-radius: 999px;
   box-shadow: 0 10px 34px rgba(120,100,90,.18);
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 12px 10px 22px; gap: 12px;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+/* When one or more gifts are selected, make the bar and its CTA pop */
+.actionbar.active {
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 3px rgba(185,127,127,.18), 0 12px 36px rgba(120,100,90,.24);
 }
 .actionbar .ab-info { font-weight: 800; font-size: 15px; color: var(--ink); }
-.actionbar .btn { padding: 12px 24px; font-size: 15px; }
+.actionbar .btn { padding: 13px 28px; font-size: 15px; }
+/* Brighter, higher-contrast Next button once it's actionable */
+.actionbar.active .btn:not(:disabled) {
+  background: var(--accent-deep); color: #fff;
+  box-shadow: 0 4px 14px rgba(185,127,127,.45);
+}
+.actionbar.active .btn:not(:disabled):hover { background: #a05f5f; }
 
 /* ─────────────── Intro overlay ─────────────── */
 .intro-modal { width: min(500px, 100%); }
@@ -151,15 +163,16 @@ button { font-family: inherit; cursor: pointer; }
   background: #fdf5f2;
 }
 .card.selected .thumb { background: #f7e9e4; }
-/* Corner check ribbon on a selected card */
-.card .select-check {
+/* Corner remove button on a selected card */
+.card .select-remove {
   position: absolute; top: 10px; right: 10px; z-index: 2;
-  width: 30px; height: 30px; border-radius: 999px;
-  background: var(--accent); color: #fff;
+  width: 30px; height: 30px; border-radius: 999px; border: none; padding: 0;
+  background: var(--accent-deep); color: #fff;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 800;
-  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,.22); transition: background .15s ease, transform .15s ease;
 }
+.card .select-remove:hover { background: #a05f5f; transform: scale(1.08); }
 
 .thumb {
   aspect-ratio: 1 / 1; background: var(--soft); position: relative; overflow: hidden;
@@ -180,6 +193,17 @@ button { font-family: inherit; cursor: pointer; }
 .card-meta { font-size: 13px; color: var(--muted); }
 .card-actions { margin-top: auto; display: flex; gap: 8px; align-items: center; }
 .selected-tag { font-size: 13px; font-weight: 800; color: var(--accent-deep); text-align: center; }
+
+/* Quantity stepper (multi-unit picker modal) */
+.qty-stepper { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 22px 0 4px; }
+.qty-btn {
+  width: 48px; height: 48px; border-radius: 999px; border: 1.5px solid var(--accent-deep);
+  background: transparent; color: var(--accent-deep); font-size: 26px; font-weight: 700;
+  line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+}
+.qty-btn:hover { background: rgba(185, 127, 127, 0.10); }
+.qty-btn:disabled { opacity: .35; cursor: not-allowed; }
+.qty-value { font-size: 34px; font-weight: 800; min-width: 44px; text-align: center; color: var(--ink); }
 
 .link-out { font-size: 13px; color: var(--accent-deep); text-decoration: none; font-weight: 700; }
 .link-out:hover { text-decoration: underline; }

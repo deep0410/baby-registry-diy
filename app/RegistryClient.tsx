@@ -53,6 +53,8 @@ export default function RegistryClient({
   const [toast, setToast] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [selectedRetailers, setSelectedRetailers] = useState<Set<string>>(new Set());
+  // Quantity picker modal for multi-unit items
+  const [qtyModal, setQtyModal] = useState<{ item: PublicItem; qty: number } | null>(null);
 
   // Wizard state
   const [step, setStep] = useState(1); // 1 = select, 2 = reserve & buy, 3 = confirm
@@ -241,6 +243,48 @@ export default function RegistryClient({
     }
   };
 
+  // Reserve `count` units of one item (one API call per unit). Used by the
+  // quantity picker for multi-unit items.
+  const reserveMany = async (item: PublicItem, count: number) => {
+    if (busyId) return;
+    // Open the store link now, inside the click gesture, so popup blockers allow it.
+    if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
+    setQtyModal(null);
+    setBusyId(item.id);
+    let reserved = 0;
+    try {
+      for (let i = 0; i < count; i++) {
+        const res = await fetch("/api/reserve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: item.id, session: session.current }),
+        });
+        if (res.status === 409) break; // no more units available
+        const data = await res.json();
+        if (data.ok && data.slot !== undefined) {
+          const slot = data.slot as number;
+          setTray((prev) => [
+            ...prev,
+            { id: item.id, slot, name: item.name, imageUrl: item.imageUrl, url: item.url },
+          ]);
+          reserved++;
+        } else break;
+      }
+    } catch {
+      /* fall through to messaging below */
+    } finally {
+      setBusyId(null);
+    }
+    if (reserved === count) {
+      flash(`Added ${reserved} × “${item.name}” to your gifts`);
+    } else if (reserved > 0) {
+      flash(`Reserved ${reserved} of ${count} — the rest were just taken.`);
+    } else {
+      flash("Couldn’t reserve those — they may have just been taken.");
+    }
+    load();
+  };
+
   const removeFromGifts = async (entry: TrayEntry) => {
     setTray((prev) =>
       prev.filter((t) => !(t.id === entry.id && t.slot === entry.slot)),
@@ -408,7 +452,16 @@ export default function RegistryClient({
                         className={`card ${unavailable ? "taken" : ""} ${selected ? "selected" : ""}`}
                       >
                         <div className="thumb" style={{ position: "relative" }}>
-                          {selected && <span className="select-check">✓</span>}
+                          {selected && (
+                            <button
+                              className="select-remove"
+                              aria-label="Remove from your gifts"
+                              title="Remove"
+                              onClick={() => removeFromGifts(tray.find((t) => t.id === item.id)!)}
+                            >
+                              ×
+                            </button>
+                          )}
                           {item.imageUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={item.imageUrl} alt={item.name} loading="lazy" />
@@ -499,8 +552,12 @@ export default function RegistryClient({
                                 className="btn small block"
                                 disabled={busyId === item.id}
                                 onClick={() => {
-                                  if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
-                                  addToGifts(item);
+                                  if (item.remaining > 1) {
+                                    setQtyModal({ item, qty: 1 });
+                                  } else {
+                                    if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
+                                    addToGifts(item);
+                                  }
                                 }}
                               >
                                 {busyId === item.id ? "Adding…" : "I’ll gift this"}
@@ -517,7 +574,7 @@ export default function RegistryClient({
           })()}
 
           {/* Sticky action bar for step 1 */}
-          <div className="actionbar">
+          <div className={`actionbar${tray.length > 0 ? " active" : ""}`}>
             <div className="ab-info">
               {tray.length === 0
                 ? "No gifts selected yet"
@@ -704,6 +761,58 @@ export default function RegistryClient({
 
             <button className="btn block" style={{ marginTop: 8 }} onClick={dismissIntro}>
               Let’s get started →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────── Quantity picker (multi-unit items) ─────────────── */}
+      {qtyModal && (
+        <div className="overlay modal-center" onClick={() => setQtyModal(null)}>
+          <div className="modal center" onClick={(e) => e.stopPropagation()}>
+            <h2>How many?</h2>
+            <p className="muted" style={{ marginBottom: 4 }}>{qtyModal.item.name}</p>
+            <p className="muted" style={{ fontSize: 13 }}>
+              {qtyModal.item.remaining} still needed. Pick how many you’d like to gift.
+            </p>
+
+            <div className="qty-stepper">
+              <button
+                className="qty-btn"
+                aria-label="Decrease"
+                disabled={qtyModal.qty <= 1}
+                onClick={() => setQtyModal((m) => (m ? { ...m, qty: Math.max(1, m.qty - 1) } : m))}
+              >
+                −
+              </button>
+              <span className="qty-value">{qtyModal.qty}</span>
+              <button
+                className="qty-btn"
+                aria-label="Increase"
+                disabled={qtyModal.qty >= qtyModal.item.remaining}
+                onClick={() =>
+                  setQtyModal((m) =>
+                    m ? { ...m, qty: Math.min(m.item.remaining, m.qty + 1) } : m,
+                  )
+                }
+              >
+                +
+              </button>
+            </div>
+
+            <button
+              className="btn block"
+              style={{ marginTop: 20 }}
+              onClick={() => reserveMany(qtyModal.item, qtyModal.qty)}
+            >
+              Gift {qtyModal.qty} &amp; open store ↗
+            </button>
+            <button
+              className="btn ghost block"
+              style={{ marginTop: 8 }}
+              onClick={() => setQtyModal(null)}
+            >
+              Cancel
             </button>
           </div>
         </div>
