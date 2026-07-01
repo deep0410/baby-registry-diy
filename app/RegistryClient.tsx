@@ -388,9 +388,14 @@ export default function RegistryClient({
               No items have been added yet. Check back soon! 🍼
             </div>
           ) : (() => {
-            // Unique retailers present in the list (only items with URLs)
+            // Hide items entirely once fully reserved/purchased by someone else —
+            // don't just gray them out. Still show an item that's in the current
+            // guest's own tray so they can review/remove their picks.
+            const visibleItems = items.filter((item) => !item.soldOut || inTray(item.id));
+
+            // Unique retailers present in the visible list (only items with URLs)
             const retailerMap = new Map<string, string>(); // name → domain
-            items.forEach((item) => {
+            visibleItems.forEach((item) => {
               const r = getRetailer(item.url);
               if (r && !retailerMap.has(r.name)) retailerMap.set(r.name, r.domain);
             });
@@ -398,8 +403,8 @@ export default function RegistryClient({
 
             const filteredItems =
               selectedRetailers.size === 0
-                ? items
-                : items.filter((item) => {
+                ? visibleItems
+                : visibleItems.filter((item) => {
                     const r = getRetailer(item.url);
                     return r && selectedRetailers.has(r.name);
                   });
