@@ -179,6 +179,7 @@ button { font-family: inherit; cursor: pointer; }
 .card-title { font-size: 17px; font-weight: 700; line-height: 1.25; }
 .card-meta { font-size: 13px; color: var(--muted); }
 .card-actions { margin-top: auto; display: flex; gap: 8px; align-items: center; }
+.selected-tag { font-size: 13px; font-weight: 800; color: var(--accent-deep); text-align: center; }
 
 .link-out { font-size: 13px; color: var(--accent-deep); text-decoration: none; font-weight: 700; }
 .link-out:hover { text-decoration: underline; }
@@ -196,6 +197,12 @@ button { font-family: inherit; cursor: pointer; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.ghost { background: var(--soft); color: var(--ink); }
 .btn.ghost:hover { background: var(--line); }
+/* Secondary outline button: transparent middle, border + text share one color */
+.btn.outline {
+  background: transparent; color: var(--accent-deep);
+  border: 1.5px solid var(--accent-deep);
+}
+.btn.outline:hover { background: rgba(185, 127, 127, 0.10); }
 .btn.small { padding: 7px 12px; font-size: 13px; }
 .btn.block { width: 100%; }
 .btn.sage { background: var(--sage); }

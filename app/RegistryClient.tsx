@@ -479,11 +479,17 @@ export default function RegistryClient({
                               </a>
                             )}
                           </div>
-                          <div className="card-actions">
+                          <div className="card-actions" style={{ flexDirection: "column", gap: 6 }}>
                             {selected ? (
-                              <button className="btn ghost small block" onClick={() => removeFromGifts(tray.find((t) => t.id === item.id)!)}>
-                                ✓ In your gifts · Remove
-                              </button>
+                              <>
+                                <div className="selected-tag">✓ In your gifts</div>
+                                <button
+                                  className="btn outline small block"
+                                  onClick={() => removeFromGifts(tray.find((t) => t.id === item.id)!)}
+                                >
+                                  Remove from list
+                                </button>
+                              </>
                             ) : unavailable ? (
                               <button className="btn ghost small block" disabled>
                                 Already reserved
@@ -492,7 +498,10 @@ export default function RegistryClient({
                               <button
                                 className="btn small block"
                                 disabled={busyId === item.id}
-                                onClick={() => addToGifts(item)}
+                                onClick={() => {
+                                  if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
+                                  addToGifts(item);
+                                }}
                               >
                                 {busyId === item.id ? "Adding…" : "I’ll gift this"}
                               </button>
