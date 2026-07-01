@@ -86,9 +86,72 @@ export default function RegistryClient({
     } finally {
       setLoading(false);
     }
+
+    // After each poll, validate tray holds against the backend.
+    // Any hold that expired or was cleared server-side gets dropped from the tray.
+    setTray((currentTray) => {
+      if (currentTray.length === 0 || !session.current) return currentTray;
+      fetch("/api/check-holds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: currentTray.map((e) => ({ id: e.id, slot: e.slot })),
+          session: session.current,
+        }),
+      })
+        .then((r) => r.json())
+        .then(({ valid }) => {
+          if (!Array.isArray(valid)) return;
+          const validKeys = new Set(valid.map((v: { id: string; slot: number }) => `${v.id}:${v.slot}`));
+          setTray((t) => t.filter((e) => validKeys.has(`${e.id}:${e.slot}`)));
+        })
+        .catch(() => { /* ignore transient errors */ });
+      return currentTray; // no immediate change — async update above handles it
+    });
   }, []);
 
-  // Initial load + background refresh.
+  // Initial load + background refresh every 6s.
+  // Hold validation (check-holds) runs as part of load() but is debounced
+  // to only fire every 15s to avoid hammering the backend.
+  const lastHoldCheck = useRef(0);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/items", { cache: "no-store" });
+      const data = await res.json();
+      if (data.items) setItems(data.items);
+    } catch {
+      /* ignore transient errors */
+    } finally {
+      setLoading(false);
+    }
+
+    // Validate tray holds every 15 seconds.
+    const now = Date.now();
+    if (now - lastHoldCheck.current < 15000) return;
+    lastHoldCheck.current = now;
+
+    setTray((currentTray) => {
+      if (currentTray.length === 0 || !session.current) return currentTray;
+      fetch("/api/check-holds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: currentTray.map((e) => ({ id: e.id, slot: e.slot })),
+          session: session.current,
+        }),
+      })
+        .then((r) => r.json())
+        .then(({ valid }) => {
+          if (!Array.isArray(valid)) return;
+          const validKeys = new Set(valid.map((v: { id: string; slot: number }) => `${v.id}:${v.slot}`));
+          setTray((t) => t.filter((e) => validKeys.has(`${e.id}:${e.slot}`)));
+        })
+        .catch(() => { /* ignore transient errors */ });
+      return currentTray;
+    });
+  }, []);
+
   useEffect(() => {
     load();
     const t = setInterval(load, 6000);

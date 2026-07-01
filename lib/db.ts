@@ -400,3 +400,33 @@ export async function adminClearAll(id: string): Promise<void> {
     )
   );
 }
+
+// ---------- Hold validation ----------
+// Given a list of { id, slot } pairs owned by a session, returns the subset
+// that still have an active hold in DynamoDB (not expired, not claimed/deleted).
+// Used by the client to auto-remove stale tray entries.
+export async function checkHolds(
+  holds: { id: string; slot: number }[],
+  session: string
+): Promise<Array<{ id: string; slot: number }>> {
+  const t = now();
+  const results = await Promise.all(
+    holds.map(async ({ id, slot }) => {
+      try {
+        const res = await ddb.send(
+          new GetCommand({ TableName: TABLE, Key: { pk: itemPk(id), sk: slotSk(slot) } })
+        );
+        const rec = res.Item as SlotRecord | undefined;
+        const valid =
+          !!rec &&
+          rec.state === "hold" &&
+          rec.holderSession === session &&
+          (rec.ttl ?? 0) > t;
+        return valid ? { id, slot } : null;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return results.filter((r): r is { id: string; slot: number } => r !== null);
+}
