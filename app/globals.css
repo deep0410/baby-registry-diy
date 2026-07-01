@@ -179,6 +179,9 @@ button { font-family: inherit; cursor: pointer; }
   display: flex; align-items: center; justify-content: center;
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb-link { display: block; width: 100%; height: 100%; cursor: pointer; }
+.card-title .title-link { color: inherit; text-decoration: none; cursor: pointer; }
+.card-title .title-link:hover { text-decoration: underline; text-decoration-color: var(--accent); }
 .thumb .placeholder { font-size: 40px; opacity: .4; }
 
 .badge {

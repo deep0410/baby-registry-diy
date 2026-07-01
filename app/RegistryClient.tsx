@@ -462,12 +462,27 @@ export default function RegistryClient({
                               ×
                             </button>
                           )}
-                          {item.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.imageUrl} alt={item.name} loading="lazy" />
-                          ) : (
-                            <span className="placeholder">🎁</span>
-                          )}
+                          {(() => {
+                            const media = item.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={item.imageUrl} alt={item.name} loading="lazy" />
+                            ) : (
+                              <span className="placeholder">🎁</span>
+                            );
+                            return item.url ? (
+                              <a
+                                className="thumb-link"
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                aria-label={`View ${item.name}`}
+                              >
+                                {media}
+                              </a>
+                            ) : (
+                              media
+                            );
+                          })()}
                           {item.soldOut ? (
                             <span className="badge sold">Reserved</span>
                           ) : item.quantity > 1 ? (
@@ -510,7 +525,13 @@ export default function RegistryClient({
                               minHeight: "2.2em",
                             }}
                           >
-                            {item.name}
+                            {item.url ? (
+                              <a className="title-link" href={item.url} target="_blank" rel="noreferrer">
+                                {item.name}
+                              </a>
+                            ) : (
+                              item.name
+                            )}
                           </div>
                           <div className="card-price-row">
                             {item.price ? (
