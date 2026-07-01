@@ -104,6 +104,14 @@ button { font-family: inherit; cursor: pointer; }
 
 .held-list { border-top: 1px solid var(--line); margin-top: 4px; }
 .tray-item .ti-links { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.tray-item .ti-info { display: flex; flex-direction: column; gap: 3px; }
+.tray-item .ti-price { font-weight: 800; font-size: 13px; color: var(--accent-deep); display: flex; align-items: baseline; gap: 5px; }
+.tray-item .ti-price .tax-note { font-weight: 600; color: var(--muted); font-size: 11px; }
+.held-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 2px 6px; margin-top: 4px; border-top: 1.5px solid var(--line);
+  font-weight: 800; font-size: 17px; color: var(--ink);
+}
 
 /* ─────────────── Sticky action bar (step 1) ─────────────── */
 .actionbar {

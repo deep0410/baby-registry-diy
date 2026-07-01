@@ -9,6 +9,7 @@ interface TrayEntry {
   name: string;
   imageUrl: string;
   url: string;
+  price: string;
 }
 
 // How long, in words, we tell the guest their items are held. This should match
@@ -33,14 +34,25 @@ export default function RegistryClient({
   houseAddress?: string;
 }) {
   const showTax = Math.abs(taxMultiplier - 1) > 0.001;
+  // Parse a display price like "$129.99" / "CA$49.99" into a currency prefix + amount.
+  const parsePriceValue = (price: string): { prefix: string; num: number } | null => {
+    if (!price) return null;
+    const m = price.match(/^([^\d]*)([\d.,]+)/);
+    if (!m) return null;
+    const num = parseFloat(m[2].replace(/,/g, ""));
+    if (!isFinite(num)) return null;
+    return { prefix: m[1], num };
+  };
   // Apply the tax multiplier to a display price like "$129.99" / "CA$49.99".
   const withTax = (price: string): string => {
-    if (!price) return "";
-    const m = price.match(/^([^\d]*)([\d.,]+)(.*)$/);
-    if (!m) return price;
-    const num = parseFloat(m[2].replace(/,/g, ""));
-    if (!isFinite(num)) return price;
-    return `${m[1]}${(num * taxMultiplier).toFixed(2)}`;
+    const p = parsePriceValue(price);
+    if (!p) return price || "";
+    return `${p.prefix}${(p.num * taxMultiplier).toFixed(2)}`;
+  };
+  // Taxed numeric value of a display price, or 0 if unparsable.
+  const taxedValue = (price: string): number => {
+    const p = parsePriceValue(price);
+    return p ? p.num * taxMultiplier : 0;
   };
 
   const [items, setItems] = useState<PublicItem[]>([]);
@@ -204,6 +216,14 @@ export default function RegistryClient({
 
   const inTray = (id: string) => tray.some((t) => t.id === id);
 
+  // Running total across everything currently in the tray (tax included).
+  const trayCurrency = tray.reduce<string>((prefix, t) => {
+    if (prefix) return prefix;
+    return parsePriceValue(t.price || "")?.prefix || "";
+  }, "") || "$";
+  const trayTotal = tray.reduce((sum, t) => sum + taxedValue(t.price || ""), 0);
+  const trayTotalLabel = `${trayCurrency}${trayTotal.toFixed(2)}`;
+
   const addToGifts = async (item: PublicItem) => {
     if (inTray(item.id) || busyId) return;
     setBusyId(item.id);
@@ -228,6 +248,7 @@ export default function RegistryClient({
             name: item.name,
             imageUrl: item.imageUrl,
             url: item.url,
+            price: item.price || "",
           },
         ]);
         flash(`Added “${item.name}” to your gifts`);
@@ -247,8 +268,6 @@ export default function RegistryClient({
   // quantity picker for multi-unit items.
   const reserveMany = async (item: PublicItem, count: number) => {
     if (busyId) return;
-    // Open the store link now, inside the click gesture, so popup blockers allow it.
-    if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
     setQtyModal(null);
     setBusyId(item.id);
     let reserved = 0;
@@ -265,7 +284,7 @@ export default function RegistryClient({
           const slot = data.slot as number;
           setTray((prev) => [
             ...prev,
-            { id: item.id, slot, name: item.name, imageUrl: item.imageUrl, url: item.url },
+            { id: item.id, slot, name: item.name, imageUrl: item.imageUrl, url: item.url, price: item.price || "" },
           ]);
           reserved++;
         } else break;
@@ -581,7 +600,6 @@ export default function RegistryClient({
                                   if (item.remaining > 1) {
                                     setQtyModal({ item, qty: 1 });
                                   } else {
-                                    if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
                                     addToGifts(item);
                                   }
                                 }}
@@ -604,7 +622,7 @@ export default function RegistryClient({
             <div className="ab-info">
               {tray.length === 0
                 ? "No gifts selected yet"
-                : `${tray.length} ${tray.length === 1 ? "gift" : "gifts"} selected`}
+                : `${tray.length} ${tray.length === 1 ? "gift" : "gifts"} selected (${trayTotalLabel})`}
             </div>
             <button
               className="btn"
@@ -639,10 +657,9 @@ export default function RegistryClient({
             )}
 
             <ol className="how-to">
-              <li>Open each item at its store using the <strong>View ↗</strong> link below.</li>
-              <li>Add it to your cart and check out.</li>
-              <li>Enter the <strong>address above</strong> as the shipping address.</li>
-              <li>Once you’ve purchased everything, come back and hit <strong>Next</strong>.</li>
+              <li><strong>Add it to your cart on the provider’s website and check out on their website.</strong></li>
+              <li>Enter the <strong>address above</strong> as the shipping address on the provider’s website.</li>
+              <li>Once you’ve purchased everything, <strong>come back and hit Next.</strong></li>
             </ol>
 
             <div className="held-list">
@@ -654,7 +671,15 @@ export default function RegistryClient({
                   ) : (
                     <div className="ti-thumb" />
                   )}
-                  <div className="ti-name">{t.name}</div>
+                  <div className="ti-info">
+                    <div className="ti-name">{t.name}</div>
+                    {t.price && (
+                      <div className="ti-price">
+                        {withTax(t.price)}
+                        {showTax && <span className="tax-note"> incl. tax</span>}
+                      </div>
+                    )}
+                  </div>
                   <div className="ti-links">
                     {t.url && (
                       <a className="link-out" href={t.url} target="_blank" rel="noreferrer">
@@ -667,6 +692,12 @@ export default function RegistryClient({
                   </div>
                 </div>
               ))}
+              {tray.some((t) => t.price) && (
+                <div className="held-total">
+                  <span>Total</span>
+                  <span>{trayTotalLabel}</span>
+                </div>
+              )}
             </div>
 
             <button className="btn block" style={{ marginTop: 20 }} onClick={() => goToStep(3)}>
@@ -831,7 +862,7 @@ export default function RegistryClient({
               style={{ marginTop: 20 }}
               onClick={() => reserveMany(qtyModal.item, qtyModal.qty)}
             >
-              Gift {qtyModal.qty} &amp; open store ↗
+              Gift {qtyModal.qty}
             </button>
             <button
               className="btn ghost block"
