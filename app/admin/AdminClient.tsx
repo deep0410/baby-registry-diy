@@ -293,6 +293,7 @@ export default function AdminClient() {
       <div className="admin-top">
         <h1 className="serif">Registry Admin</h1>
         <div className="row" style={{ flex: "none" }}>
+          <a className="btn ghost small" href="/admin/report">Report</a>
           <a className="btn ghost small" href="/" target="_blank" rel="noreferrer">View public site ↗</a>
           <button className="btn ghost small" onClick={logout}>Sign out</button>
         </div>

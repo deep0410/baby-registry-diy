@@ -318,9 +318,7 @@ export default function RegistryClient({
                     <img
                       src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`}
                       alt=""
-                      width={14}
-                      height={14}
-                      style={{ marginRight: 5, verticalAlign: "middle", borderRadius: 3 }}
+                      style={{ marginRight: 6, verticalAlign: "middle", borderRadius: 3, maxWidth: 32, maxHeight: 32, width: 20, height: 20 }}
                     />
                     {name}
                   </button>
@@ -360,8 +358,6 @@ export default function RegistryClient({
                           src={`https://www.google.com/s2/favicons?domain=${retailer.domain}&sz=32`}
                           alt={retailer.name}
                           title={retailer.name}
-                          width={20}
-                          height={20}
                           style={{
                             position: "absolute",
                             bottom: 6,
@@ -370,6 +366,10 @@ export default function RegistryClient({
                             background: "white",
                             padding: 2,
                             boxShadow: "0 1px 4px rgba(0,0,0,.18)",
+                            maxWidth: 32,
+                            maxHeight: 32,
+                            width: 24,
+                            height: 24,
                           }}
                         />
                       )}
