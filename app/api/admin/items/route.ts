@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       imageKey: body.imageKey ? String(body.imageKey) : undefined,
       price: body.price !== undefined ? String(body.price) : undefined,
       quantity: Number(body.quantity || 1),
+      taxExempt: !!body.taxExempt,
     });
     return NextResponse.json({ ok: true, id });
   } catch (e: any) {

@@ -20,6 +20,9 @@ export interface PublicItem {
   remaining: number; // units still needed
   taken: number; // units claimed or on active hold
   soldOut: boolean;
+  // If true, the site's tax multiplier is NOT applied to this item's price.
+  // Defaults to false (taxed) for any item that predates this field.
+  taxExempt: boolean;
 }
 
 // What the admin sees (everything).
@@ -37,6 +40,8 @@ export interface AdminItem {
   archived: boolean;
   createdAt: string;
   claims: Claim[];
+  // If true, the site's tax multiplier is NOT applied to this item's price.
+  taxExempt: boolean;
 }
 
 export interface ReserveResult {

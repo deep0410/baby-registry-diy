@@ -11,6 +11,7 @@ interface FormState {
   price: string;
   imageUrl: string;
   imageKey: string;
+  taxExempt: boolean;
 }
 
 interface BulkResult {
@@ -24,7 +25,7 @@ interface BulkResult {
 
 type PanelMode = "single" | "bulk" | null;
 
-const emptyForm: FormState = { name: "", url: "", quantity: 1, price: "", imageUrl: "", imageKey: "" };
+const emptyForm: FormState = { name: "", url: "", quantity: 1, price: "", imageUrl: "", imageKey: "", taxExempt: false };
 
 export default function AdminClient() {
   const router = useRouter();
@@ -148,7 +149,7 @@ export default function AdminClient() {
     if (!form.name.trim()) return flash("Name is required.");
     setSaving(true);
     try {
-      const payload = { name: form.name, url: form.url, quantity: form.quantity, price: form.price, imageUrl: form.imageUrl, imageKey: form.imageKey };
+      const payload = { name: form.name, url: form.url, quantity: form.quantity, price: form.price, imageUrl: form.imageUrl, imageKey: form.imageKey, taxExempt: form.taxExempt };
       const res = editingId
         ? await fetch(`/api/admin/items/${editingId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await fetch("/api/admin/items",               { method: "POST",  headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -168,7 +169,7 @@ export default function AdminClient() {
   const startEdit = (it: AdminItem) => {
     setPanelMode("single");
     setEditingId(it.id);
-    setForm({ name: it.name, url: it.url, quantity: it.quantity, price: it.price || "", imageUrl: it.imageKey ? "" : it.imageUrl, imageKey: it.imageKey || "" });
+    setForm({ name: it.name, url: it.url, quantity: it.quantity, price: it.price || "", imageUrl: it.imageKey ? "" : it.imageUrl, imageKey: it.imageKey || "", taxExempt: !!it.taxExempt });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -187,7 +188,7 @@ export default function AdminClient() {
   const runBulkImport = async () => {
     setBulkJsonError(null);
 
-    let entries: { link: string; quantity: number; name: string }[] = [];
+    let entries: { link: string; quantity: number; name: string; taxExempt: boolean }[] = [];
     try {
       const parsed = JSON.parse(bulkLinks.trim());
       if (!Array.isArray(parsed)) throw new Error("Expected a JSON array [ … ]");
@@ -197,6 +198,7 @@ export default function AdminClient() {
           link: e.link.trim(),
           quantity: Math.max(1, parseInt(String(e.quantity ?? 1), 10) || 1),
           name: typeof e.name === "string" ? e.name.trim() : "",
+          taxExempt: e.taxExempt === true || e.taxExempt === "true",
         }));
     } catch (e: any) {
       setBulkJsonError(e?.message || "Invalid JSON");
@@ -209,7 +211,7 @@ export default function AdminClient() {
     setBulkRunning(true);
 
     for (let i = 0; i < entries.length; i++) {
-      const { link, quantity, name: nameOverride } = entries[i];
+      const { link, quantity, name: nameOverride, taxExempt } = entries[i];
       setBulkResults((prev) => prev.map((r, idx) => idx === i ? { ...r, status: "fetching" } : r));
 
       try {
@@ -232,6 +234,7 @@ export default function AdminClient() {
             imageUrl: og.imageUrl || "",
             price: og.price || "",
             quantity,
+            taxExempt,
           }),
         });
 
@@ -339,6 +342,15 @@ export default function AdminClient() {
               <input value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="$0.00" />
             </div>
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 400, marginTop: 2 }}>
+            <input
+              type="checkbox"
+              checked={form.taxExempt}
+              onChange={(e) => setForm({ ...form, taxExempt: e.target.checked })}
+              style={{ width: "auto" }}
+            />
+            No tax on this item (skip the tax multiplier on the public site)
+          </label>
           <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
             Tip: paste the link, then use "Auto-fill from link" to grab the photo, price, and name.
           </p>
@@ -378,7 +390,7 @@ export default function AdminClient() {
         <div className="panel">
           <h3>Bulk add items</h3>
           <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
-            Paste a JSON array. Required: <code>link</code>. Optional: <code>quantity</code> (default 1) and <code>name</code> (skips scraping if provided). Price and photo are always auto-filled from the link.
+            Paste a JSON array. Required: <code>link</code>. Optional: <code>quantity</code> (default 1), <code>name</code> (skips scraping if provided), and <code>taxExempt</code> (default false — set true to skip tax on this item). Price and photo are always auto-filled from the link.
           </p>
           <label>Items JSON</label>
           <textarea
@@ -386,7 +398,7 @@ export default function AdminClient() {
             style={{ width: "100%", fontFamily: "monospace", fontSize: 12, resize: "vertical", border: bulkJsonError ? "1.5px solid #c0392b" : undefined }}
             value={bulkLinks}
             onChange={(e) => { setBulkLinks(e.target.value); setBulkResults([]); setBulkJsonError(null); }}
-            placeholder={`[\n  { "link": "https://www.amazon.ca/dp/...", "quantity": 1 },\n  { "link": "https://www.walmart.ca/en/ip/...", "quantity": 2, "name": "JOIE Ayr Stroller" },\n  { "link": "https://www.ikea.com/ca/en/p/...", "quantity": 1 }\n]`}
+            placeholder={`[\n  { "link": "https://www.amazon.ca/dp/...", "quantity": 1 },\n  { "link": "https://www.walmart.ca/en/ip/...", "quantity": 2, "name": "JOIE Ayr Stroller" },\n  { "link": "https://www.ikea.com/ca/en/p/...", "quantity": 1, "taxExempt": true }\n]`}
             disabled={bulkRunning}
           />
           {bulkJsonError && (
@@ -473,6 +485,7 @@ export default function AdminClient() {
                   {it.held > 0 && <span className="pill">{it.held} on hold</span>}
                   <span className="pill">qty {it.quantity}</span>
                   {it.archived && <span className="pill">hidden</span>}
+                  {it.taxExempt && <span className="pill">no tax</span>}
                 </div>
                 {it.url && (
                   <a className="link-out" href={it.url} target="_blank" rel="noreferrer">

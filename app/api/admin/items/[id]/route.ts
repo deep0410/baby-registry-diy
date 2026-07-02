@@ -17,6 +17,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       price: body.price,
       quantity: body.quantity !== undefined ? Number(body.quantity) : undefined,
       archived: body.archived,
+      taxExempt: body.taxExempt !== undefined ? !!body.taxExempt : undefined,
     });
     return NextResponse.json({ ok: true });
   } catch (e: any) {

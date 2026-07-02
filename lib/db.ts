@@ -39,6 +39,9 @@ interface MetaRecord {
   quantity: number;
   archived: boolean;
   createdAt: string;
+  // If true, the tax multiplier shown to guests is skipped for this item.
+  // Absent/undefined means "not exempt" — items are taxed by default.
+  taxExempt?: boolean;
 }
 interface SlotRecord {
   pk: string;
@@ -105,6 +108,7 @@ export async function getPublicItems(): Promise<PublicItem[]> {
         remaining,
         taken,
         soldOut: remaining <= 0,
+        taxExempt: !!m.taxExempt,
       };
     })
     .sort((a, b) => {
@@ -150,6 +154,7 @@ export async function getAdminItems(): Promise<AdminItem[]> {
         archived: !!m.archived,
         createdAt: m.createdAt,
         claims,
+        taxExempt: !!m.taxExempt,
       };
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -168,6 +173,7 @@ export async function createItem(data: {
   imageKey?: string;
   price?: string;
   quantity: number;
+  taxExempt?: boolean;
 }): Promise<string> {
   const id = randomUUID();
   const rec: MetaRecord = {
@@ -183,6 +189,8 @@ export async function createItem(data: {
     quantity: Math.max(1, Math.floor(data.quantity || 1)),
     archived: false,
     createdAt: new Date().toISOString(),
+    // Default: taxed, unless explicitly marked tax-exempt.
+    taxExempt: !!data.taxExempt,
   };
   await ddb.send(new PutCommand({ TableName: TABLE, Item: rec }));
   return id;
@@ -198,6 +206,7 @@ export async function updateItem(
     price: string;
     quantity: number;
     archived: boolean;
+    taxExempt: boolean;
   }>
 ): Promise<void> {
   const sets: string[] = [];
@@ -215,6 +224,7 @@ export async function updateItem(
   if (data.price !== undefined) put("price", data.price.trim());
   if (data.quantity !== undefined) put("quantity", Math.max(1, Math.floor(data.quantity)));
   if (data.archived !== undefined) put("archived", data.archived);
+  if (data.taxExempt !== undefined) put("taxExempt", data.taxExempt);
   if (sets.length === 0) return;
   await ddb.send(
     new UpdateCommand({

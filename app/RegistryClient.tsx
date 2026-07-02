@@ -10,6 +10,7 @@ interface TrayEntry {
   imageUrl: string;
   url: string;
   price: string;
+  taxExempt: boolean;
 }
 
 // How long, in words, we tell the guest their items are held. This should match
@@ -44,15 +45,18 @@ export default function RegistryClient({
     return { prefix: m[1], num };
   };
   // Apply the tax multiplier to a display price like "$129.99" / "CA$49.99".
-  const withTax = (price: string): string => {
+  // Skipped for items marked tax-exempt.
+  const withTax = (price: string, exempt = false): string => {
     const p = parsePriceValue(price);
     if (!p) return price || "";
-    return `${p.prefix}${(p.num * taxMultiplier).toFixed(2)}`;
+    const mult = exempt ? 1 : taxMultiplier;
+    return `${p.prefix}${(p.num * mult).toFixed(2)}`;
   };
   // Taxed numeric value of a display price, or 0 if unparsable.
-  const taxedValue = (price: string): number => {
+  const taxedValue = (price: string, exempt = false): number => {
     const p = parsePriceValue(price);
-    return p ? p.num * taxMultiplier : 0;
+    if (!p) return 0;
+    return exempt ? p.num : p.num * taxMultiplier;
   };
 
   const [items, setItems] = useState<PublicItem[]>([]);
@@ -221,7 +225,7 @@ export default function RegistryClient({
     if (prefix) return prefix;
     return parsePriceValue(t.price || "")?.prefix || "";
   }, "") || "$";
-  const trayTotal = tray.reduce((sum, t) => sum + taxedValue(t.price || ""), 0);
+  const trayTotal = tray.reduce((sum, t) => sum + taxedValue(t.price || "", t.taxExempt), 0);
   const trayTotalLabel = `${trayCurrency}${trayTotal.toFixed(2)}`;
 
   const addToGifts = async (item: PublicItem) => {
@@ -249,6 +253,7 @@ export default function RegistryClient({
             imageUrl: item.imageUrl,
             url: item.url,
             price: item.price || "",
+            taxExempt: !!item.taxExempt,
           },
         ]);
         flash(`Added “${item.name}” to your gifts`);
@@ -284,7 +289,7 @@ export default function RegistryClient({
           const slot = data.slot as number;
           setTray((prev) => [
             ...prev,
-            { id: item.id, slot, name: item.name, imageUrl: item.imageUrl, url: item.url, price: item.price || "" },
+            { id: item.id, slot, name: item.name, imageUrl: item.imageUrl, url: item.url, price: item.price || "", taxExempt: !!item.taxExempt },
           ]);
           reserved++;
         } else break;
@@ -560,8 +565,9 @@ export default function RegistryClient({
                           <div className="card-price-row">
                             {item.price ? (
                               <span className="price">
-                                {withTax(item.price)}
-                                {showTax && <span className="tax-note">incl. tax</span>}
+                                {withTax(item.price, item.taxExempt)}
+                                {showTax && !item.taxExempt && <span className="tax-note">incl. tax</span>}
+                                {item.taxExempt && <span className="tax-note">no tax</span>}
                               </span>
                             ) : (
                               <span />
@@ -657,6 +663,7 @@ export default function RegistryClient({
             )}
 
             <ol className="how-to">
+              <li>Open each item at its store using the <strong>View ↗</strong> link below.</li>
               <li><strong>Add it to your cart on the provider’s website and check out on their website.</strong></li>
               <li>Enter the <strong>address above</strong> as the shipping address on the provider’s website.</li>
               <li>Once you’ve purchased everything, <strong>come back and hit Next.</strong></li>
@@ -665,18 +672,42 @@ export default function RegistryClient({
             <div className="held-list">
               {tray.map((t) => (
                 <div className="tray-item" key={`${t.id}-${t.slot}`}>
-                  {t.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img className="ti-thumb" src={t.imageUrl} alt={t.name} />
-                  ) : (
-                    <div className="ti-thumb" />
-                  )}
+                  {(() => {
+                    const thumb = t.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img className="ti-thumb" src={t.imageUrl} alt={t.name} />
+                    ) : (
+                      <div className="ti-thumb" />
+                    );
+                    return t.url ? (
+                      <a
+                        className="ti-thumb-link"
+                        href={t.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`View ${t.name}`}
+                      >
+                        {thumb}
+                      </a>
+                    ) : (
+                      thumb
+                    );
+                  })()}
                   <div className="ti-info">
-                    <div className="ti-name">{t.name}</div>
+                    <div className="ti-name">
+                      {t.url ? (
+                        <a href={t.url} target="_blank" rel="noreferrer">
+                          {t.name}
+                        </a>
+                      ) : (
+                        t.name
+                      )}
+                    </div>
                     {t.price && (
                       <div className="ti-price">
-                        {withTax(t.price)}
-                        {showTax && <span className="tax-note"> incl. tax</span>}
+                        {withTax(t.price, t.taxExempt)}
+                        {showTax && !t.taxExempt && <span className="tax-note"> incl. tax</span>}
+                        {t.taxExempt && <span className="tax-note"> no tax</span>}
                       </div>
                     )}
                   </div>
