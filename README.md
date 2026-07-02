@@ -11,26 +11,31 @@ A personal baby registry app — guests browse a gift list, claim what they want
 ## How it works
 
 ### Landing page (`/`)
+
 Guests land on a welcome page with two choices: **RSVP** (`/rsvp`) or **Baby Registry** (`/baby-registry`).
 
 ### RSVP (`/rsvp`)
+
 - Guests enter their name, email, and number of people, then submit
 - If that email has already RSVP'd, the form pulls up the existing RSVP ("You've already RSVP'd — X people") and offers a **Change** flow to update the head count
 - Each new or updated RSVP triggers a confirmation email sent from a personal Gmail account (via nodemailer) containing the event details — venue name, address, time, and attire for men/women — all driven by environment variables
 - RSVPs are stored in the same DynamoDB table under a `RSVP#<email>` partition key
 
 ### Public registry (`/baby-registry`)
+
 - Guests browse a pastel grid of registry items with photos, prices, and store links
 - They add items to a **My Gifts** list, then confirm with their name and a message
 - The grid auto-refreshes every 6 seconds so availability is always current
 - Items with `quantity > 1` show "X of Y left" until every unit is claimed
 
 ### Reservation logic
+
 Each item has `quantity` slots in DynamoDB. Adding an item to a gift list runs an atomic `UpdateItem` with a `ConditionExpression` that only succeeds on a genuinely free slot — two guests can never grab the same slot simultaneously. Confirming converts a temporary hold into a permanent claim. Holds auto-expire via DynamoDB TTL (default 30 minutes, configurable).
 
 **Tray persistence:** the gift list tray is saved to `localStorage` and restored on page reload, so a guest's holds survive a refresh or accidental tab close — the items stay reserved and show as "In your gifts" rather than "Reserved."
 
 ### Admin panel (`/admin`)
+
 Password-protected dashboard to manage the registry:
 
 - **Add item** — paste a product link, hit "Auto-fill from link" to pull the name, price, and photo automatically (works for Walmart, IKEA, and others; Amazon often blocks bots so manual entry is needed there). You can also upload a photo directly to S3 or paste an image URL.
@@ -108,6 +113,7 @@ scripts/
 ## Setup
 
 ### Prerequisites
+
 - Node 18+
 - AWS account + AWS CLI configured
 - Vercel account
@@ -127,7 +133,7 @@ npm install
 
 Creates a DynamoDB table, private S3 bucket (with TTL + CORS), a scoped IAM user, and writes a ready-to-go `.env.local`. The generated admin password is printed at the end.
 
-> **RSVP note:** RSVPs live in the *same* DynamoDB table (`RSVP#<email>` keys), so there is **no extra table, migration, or seed script** — if the registry table already exists, RSVP works out of the box. Only the Gmail + event env vars below are needed for the confirmation emails.
+> **RSVP note:** RSVPs live in the _same_ DynamoDB table (`RSVP#<email>` keys), so there is **no extra table, migration, or seed script** — if the registry table already exists, RSVP works out of the box. Only the Gmail + event env vars below are needed for the confirmation emails.
 
 To set your own credentials upfront:
 
@@ -166,10 +172,10 @@ The project deploys automatically on every push to `main` via GitHub Actions (`.
 
 **One-time setup — add these three secrets to your GitHub repo (Settings → Secrets → Actions):**
 
-| Secret | Where to get it |
-|--------|----------------|
-| `VERCEL_TOKEN` | vercel.com → Account Settings → Tokens → Create Token |
-| `VERCEL_ORG_ID` | vercel.com → Team Settings → General → Team ID |
+| Secret              | Where to get it                                        |
+| ------------------- | ------------------------------------------------------ |
+| `VERCEL_TOKEN`      | vercel.com → Account Settings → Tokens → Create Token  |
+| `VERCEL_ORG_ID`     | vercel.com → Team Settings → General → Team ID         |
 | `VERCEL_PROJECT_ID` | vercel.com → Project → Settings → General → Project ID |
 
 **Also add all environment variables to Vercel** (Project → Settings → Environment Variables) — see the table below. After the first deploy the site is live; every subsequent `git push` deploys automatically.
@@ -180,28 +186,28 @@ The project deploys automatically on every push to `main` via GitHub Actions (`.
 
 ## Environment variables
 
-| Variable | Required | Description |
-|---|---|---|
-| `ADMIN_USERNAME` | ✓ | Admin login username |
-| `ADMIN_PASSWORD` | ✓ | Admin login password |
-| `SESSION_SECRET` | ✓ | Signs the admin cookie — `openssl rand -hex 32` |
-| `AWS_REGION` | ✓ | e.g. `us-east-1` |
-| `DYNAMODB_TABLE` | ✓ | DynamoDB table name (default `baby-registry`) |
-| `S3_BUCKET` | ✓ | S3 bucket name for uploaded photos |
-| `AWS_ACCESS_KEY_ID` | ✓ | IAM user access key |
-| `AWS_SECRET_ACCESS_KEY` | ✓ | IAM user secret key |
-| `NEXT_PUBLIC_REGISTRY_TITLE` | ✓ | Displayed in the header, e.g. `Baby Patel` |
-| `NEXT_PUBLIC_REGISTRY_SUBTITLE` | ✓ | Subtitle, e.g. `We're having a baby!` |
-| `NEXT_PUBLIC_TAX_MULTIPLIER` | | Tax on displayed prices: `1.13` = 13%, `1` = none (default `1.13`) |
-| `HOLD_TTL_SECONDS` | | How long a hold lasts before auto-expiring (default `1800` = 30 min) |
-| `GMAIL_USER` | ✓ (for RSVP email) | Gmail address the confirmation emails are sent from |
-| `GMAIL_APP_PASSWORD` | ✓ (for RSVP email) | Gmail **App Password** (myaccount.google.com/apppasswords), not the regular password |
-| `EVENT_NAME` | | Event name in the RSVP email (default `Baby Shower`) |
-| `VENUE_NAME` | | Venue name shown in the RSVP email |
-| `VENUE_ADDRESS` | | Venue address shown in the RSVP email |
-| `EVENT_TIME` | | Event date/time shown in the RSVP email |
-| `ATTIRE_MEN` | | Attire guidance for men shown in the RSVP email |
-| `ATTIRE_WOMEN` | | Attire guidance for women shown in the RSVP email |
+| Variable                        | Required           | Description                                                                          |
+| ------------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
+| `ADMIN_USERNAME`                | ✓                  | Admin login username                                                                 |
+| `ADMIN_PASSWORD`                | ✓                  | Admin login password                                                                 |
+| `SESSION_SECRET`                | ✓                  | Signs the admin cookie — `openssl rand -hex 32`                                      |
+| `AWS_REGION`                    | ✓                  | e.g. `us-east-1`                                                                     |
+| `DYNAMODB_TABLE`                | ✓                  | DynamoDB table name (default `baby-registry`)                                        |
+| `S3_BUCKET`                     | ✓                  | S3 bucket name for uploaded photos                                                   |
+| `AWS_ACCESS_KEY_ID`             | ✓                  | IAM user access key                                                                  |
+| `AWS_SECRET_ACCESS_KEY`         | ✓                  | IAM user secret key                                                                  |
+| `NEXT_PUBLIC_REGISTRY_TITLE`    | ✓                  | Displayed in the header, e.g. `Baby Patel`                                           |
+| `NEXT_PUBLIC_REGISTRY_SUBTITLE` | ✓                  | Subtitle, e.g. `We're having a baby!`                                                |
+| `NEXT_PUBLIC_TAX_MULTIPLIER`    |                    | Tax on displayed prices: `1.13` = 13%, `1` = none (default `1.13`)                   |
+| `HOLD_TTL_SECONDS`              |                    | How long a hold lasts before auto-expiring (default `1800` = 30 min)                 |
+| `GMAIL_USER`                    | ✓ (for RSVP email) | Gmail address the confirmation emails are sent from                                  |
+| `GMAIL_APP_PASSWORD`            | ✓ (for RSVP email) | Gmail **App Password** (myaccount.google.com/apppasswords), not the regular password |
+| `EVENT_NAME`                    |                    | Event name in the RSVP email (default `Baby Shower`)                                 |
+| `VENUE_NAME`                    |                    | Venue name shown in the RSVP email                                                   |
+| `VENUE_ADDRESS`                 |                    | Venue address shown in the RSVP email                                                |
+| `EVENT_TIME`                    |                    | Event date/time shown in the RSVP email                                              |
+| `ATTIRE_MEN`                    |                    | Attire guidance for men shown in the RSVP email                                      |
+| `ATTIRE_WOMEN`                  |                    | Attire guidance for women shown in the RSVP email                                    |
 
 If `GMAIL_USER` / `GMAIL_APP_PASSWORD` are unset, RSVPs still save — the email is just skipped (logged as a warning). Blank event-detail variables are omitted from the email.
 
@@ -223,12 +229,19 @@ If you prefer not to use the setup script:
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["dynamodb:GetItem","dynamodb:PutItem","dynamodb:UpdateItem","dynamodb:DeleteItem","dynamodb:Query","dynamodb:Scan"],
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ],
       "Resource": "arn:aws:dynamodb:REGION:ACCOUNT_ID:table/baby-registry"
     },
     {
       "Effect": "Allow",
-      "Action": ["s3:PutObject","s3:GetObject"],
+      "Action": ["s3:PutObject", "s3:GetObject"],
       "Resource": "arn:aws:s3:::YOUR_BUCKET/*"
     }
   ]
@@ -241,7 +254,7 @@ To remove all AWS resources: `./scripts/teardown-aws.sh` (destructive).
 
 ## Utility scripts
 
-Both scripts use the `duvaire` AWS CLI profile and run from the project folder with `node`.
+Both scripts use the `x` AWS CLI profile and run from the project folder with `node`.
 
 ### Add items in bulk (bypass the UI)
 
