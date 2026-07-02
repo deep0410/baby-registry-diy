@@ -33,16 +33,18 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// Returns true if the email was actually sent, false if skipped (creds not set).
+// Throws on a real send failure (e.g. bad app password).
 export async function sendRsvpEmail(opts: {
   name: string;
   email: string;
   partySize: number;
   isUpdate: boolean;
-}): Promise<void> {
+}): Promise<boolean> {
   const t = transporter();
   if (!t) {
     console.warn("RSVP email skipped: GMAIL_USER / GMAIL_APP_PASSWORD not set");
-    return;
+    return false;
   }
   const d = eventDetails();
   const firstName = opts.name.trim().split(/\s+/)[0] || opts.name;
@@ -120,4 +122,5 @@ export async function sendRsvpEmail(opts: {
     text,
     html,
   });
+  return true;
 }

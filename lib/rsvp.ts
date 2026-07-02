@@ -1,5 +1,6 @@
 import {
   DynamoDBDocumentClient,
+  DeleteCommand,
   GetCommand,
   PutCommand,
   ScanCommand,
@@ -81,6 +82,51 @@ export async function saveRsvp(data: {
       updatedAt: rec.updatedAt,
     },
     created: !existing,
+  };
+}
+
+export async function deleteRsvp(email: string): Promise<void> {
+  await ddb.send(
+    new DeleteCommand({ TableName: TABLE, Key: { pk: rsvpPk(email), sk: META } })
+  );
+}
+
+// Admin edit. If the email changed, the record moves to a new key (email is
+// the partition key), preserving the original createdAt.
+export async function updateRsvp(data: {
+  originalEmail: string;
+  name: string;
+  email: string;
+  partySize: number;
+}): Promise<{ rsvp: Rsvp } | { error: string }> {
+  const from = normalizeEmail(data.originalEmail);
+  const to = normalizeEmail(data.email);
+  const existing = await getRsvp(from);
+  if (!existing) return { error: "RSVP not found" };
+  if (from !== to) {
+    const clash = await getRsvp(to);
+    if (clash) return { error: "An RSVP with that email already exists" };
+  }
+  const rec: RsvpRecord = {
+    pk: rsvpPk(to),
+    sk: META,
+    type: "rsvp",
+    name: data.name.trim(),
+    email: to,
+    partySize: Math.max(1, Math.floor(data.partySize)),
+    createdAt: existing.createdAt,
+    updatedAt: new Date().toISOString(),
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE, Item: rec }));
+  if (from !== to) await deleteRsvp(from);
+  return {
+    rsvp: {
+      name: rec.name,
+      email: rec.email,
+      partySize: rec.partySize,
+      createdAt: rec.createdAt,
+      updatedAt: rec.updatedAt,
+    },
   };
 }
 

@@ -46,11 +46,10 @@ export async function POST(req: NextRequest) {
     const { rsvp, created } = await saveRsvp({ name, email, partySize });
 
     // Confirmation email — an email failure shouldn't lose the RSVP.
-    let emailSent = true;
+    let emailSent = false;
     try {
-      await sendRsvpEmail({ name: rsvp.name, email, partySize, isUpdate: !created });
+      emailSent = await sendRsvpEmail({ name: rsvp.name, email, partySize, isUpdate: !created });
     } catch (e) {
-      emailSent = false;
       console.error("RSVP email failed:", e);
     }
 

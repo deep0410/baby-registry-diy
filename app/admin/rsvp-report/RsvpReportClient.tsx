@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Rsvp } from "@/lib/rsvp";
 
@@ -43,13 +43,160 @@ function csvEscape(s: string): string {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// ── Edit / Add modal ──────────────────────────────────────────────────────────
+
+interface ModalState {
+  mode: "add" | "edit";
+  originalEmail?: string; // set in edit mode
+  name: string;
+  email: string;
+  partySize: string;
+}
+
+function RsvpModal({
+  state,
+  onClose,
+  onSaved,
+}: {
+  state: ModalState;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(state.name);
+  const [email, setEmail] = useState(state.email);
+  const [partySize, setPartySize] = useState(state.partySize);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      const isEdit = state.mode === "edit";
+      const res = await fetch("/api/admin/rsvps", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(isEdit ? { originalEmail: state.originalEmail } : {}),
+          name,
+          email,
+          partySize: Number(partySize),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        return;
+      }
+      onSaved();
+    } catch {
+      setError("Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!state.originalEmail) return;
+    if (!confirm(`Remove the RSVP for ${state.originalEmail}?`)) return;
+    setError("");
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/admin/rsvps?email=${encodeURIComponent(state.originalEmail)}`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Something went wrong");
+        return;
+      }
+      onSaved();
+    } catch {
+      setError("Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="overlay modal-center" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2 className="serif">{state.mode === "add" ? "Add RSVP" : "Edit RSVP"}</h2>
+        {error && (
+          <div className="rsvp-msg err" style={{ marginBottom: 12 }}>{error}</div>
+        )}
+        <form onSubmit={save}>
+          <label htmlFor="m-name">Name</label>
+          <input
+            id="m-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            required
+            autoFocus
+          />
+
+          <label htmlFor="m-email">Email</label>
+          <input
+            id="m-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="guest@example.com"
+            required
+          />
+
+          <label htmlFor="m-party">Number of people</label>
+          <input
+            id="m-party"
+            type="number"
+            min={1}
+            max={50}
+            value={partySize}
+            onChange={(e) => setPartySize(e.target.value)}
+            required
+          />
+
+          <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+            <button className="btn" type="submit" disabled={busy}>
+              {busy ? "Saving…" : state.mode === "add" ? "Add RSVP" : "Save changes"}
+            </button>
+            <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+              Cancel
+            </button>
+            {state.mode === "edit" && (
+              <button
+                className="btn danger"
+                type="button"
+                onClick={remove}
+                disabled={busy}
+                style={{ marginLeft: "auto" }}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </form>
+        <p className="muted" style={{ fontSize: 12, marginTop: 14, marginBottom: 0 }}>
+          Admin changes don&apos;t send a confirmation email to the guest.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function RsvpReportClient() {
   const router = useRouter();
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
+  const [modal, setModal] = useState<ModalState | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch("/api/admin/rsvps", { cache: "no-store" })
       .then((r) => {
         if (r.status === 401) {
@@ -64,6 +211,10 @@ export default function RsvpReportClient() {
       })
       .catch(() => setLoading(false));
   }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const filtered = useMemo(() => {
     const lc = filter.toLowerCase();
@@ -99,13 +250,25 @@ export default function RsvpReportClient() {
 
   const printReport = () => window.print();
 
+  const openAdd = () =>
+    setModal({ mode: "add", name: "", email: "", partySize: "1" });
+  const openEdit = (r: Rsvp) =>
+    setModal({
+      mode: "edit",
+      originalEmail: r.email,
+      name: r.name,
+      email: r.email,
+      partySize: String(r.partySize),
+    });
+
   return (
     <div className="admin-wrap">
       {/* ── Header ── */}
       <div className="admin-top">
         <h1 className="serif">RSVP Report</h1>
         <div className="row" style={{ flex: "none", gap: 8 }}>
-          <button className="btn small" onClick={exportCsv} disabled={filtered.length === 0}>
+          <button className="btn small" onClick={openAdd}>＋ Add RSVP</button>
+          <button className="btn small ghost" onClick={exportCsv} disabled={filtered.length === 0}>
             ⬇️ Export CSV
           </button>
           <button className="btn small ghost" onClick={printReport} disabled={filtered.length === 0}>
@@ -139,11 +302,12 @@ export default function RsvpReportClient() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--border)", background: "var(--bg-card, #fdf8f5)" }}>
-                <th style={{ ...thStyle, width: "30%" }}>Name</th>
-                <th style={{ ...thStyle, width: "34%" }}>Email</th>
+                <th style={{ ...thStyle, width: "28%" }}>Name</th>
+                <th style={{ ...thStyle, width: "32%" }}>Email</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>People</th>
                 <th style={thStyle}>RSVP&apos;d</th>
                 <th style={thStyle}>Last updated</th>
+                <th style={{ ...thStyle, textAlign: "right" }}></th>
               </tr>
             </thead>
             <tbody>
@@ -168,6 +332,11 @@ export default function RsvpReportClient() {
                       ? new Date(r.updatedAt).toLocaleDateString()
                       : "—"}
                   </td>
+                  <td style={{ ...tdStyle, textAlign: "right" }}>
+                    <button className="btn ghost small" onClick={() => openEdit(r)}>
+                      ✏️ Edit
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -184,6 +353,19 @@ export default function RsvpReportClient() {
             <StatCard label="Total people attending" value={String(totalPeople)} accent />
           </div>
         </div>
+      )}
+
+      {/* ── Modal ── */}
+      {modal && (
+        <RsvpModal
+          state={modal}
+          onClose={() => setModal(null)}
+          onSaved={() => {
+            setModal(null);
+            setLoading(true);
+            load();
+          }}
+        />
       )}
     </div>
   );
