@@ -202,7 +202,8 @@ The project deploys automatically on every push to `main` via GitHub Actions (`.
 | `HOLD_TTL_SECONDS`              |                    | How long a hold lasts before auto-expiring (default `1800` = 30 min)                 |
 | `GMAIL_USER`                    | ✓ (for RSVP email) | Gmail address the confirmation emails are sent from                                  |
 | `GMAIL_APP_PASSWORD`            | ✓ (for RSVP email) | Gmail **App Password** (myaccount.google.com/apppasswords), not the regular password |
-| `EVENT_NAME`                    |                    | Event name in the RSVP email (default `Baby Shower`)                                 |
+| `WELCOME_NAME`                  |                    | Landing page headline prefix, e.g. `Deep & Keerti's` — headline reads `<WELCOME_NAME> <EVENT_NAME>` |
+| `EVENT_NAME`                    |                    | Event name on the landing page + RSVP email (default `Baby Shower`)                  |
 | `VENUE_NAME`                    |                    | Venue name shown in the RSVP email                                                   |
 | `VENUE_ADDRESS`                 |                    | Venue address shown in the RSVP email                                                |
 | `EVENT_TIME`                    |                    | Event date/time shown in the RSVP email                                              |

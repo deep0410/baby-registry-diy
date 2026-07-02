@@ -3,15 +3,16 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default function Home() {
-  const title = process.env.NEXT_PUBLIC_REGISTRY_TITLE || "Baby Patel";
-  const subtitle =
-    process.env.NEXT_PUBLIC_REGISTRY_SUBTITLE || "We're having a baby!";
+  const welcomeName = process.env.WELCOME_NAME || "";
+  const eventName = process.env.EVENT_NAME || "Baby Shower";
   return (
     <main className="landing">
       <header className="site-header">
-        <div className="eyebrow">Welcome</div>
-        <h1>{title}</h1>
-        <p>{subtitle}</p>
+        <div className="eyebrow">Welcome!</div>
+        <h1>
+          {welcomeName} {eventName}
+        </h1>
+        <p>We are excited for you to join us.</p>
       </header>
 
       <div className="landing-cards">
