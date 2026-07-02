@@ -10,7 +10,16 @@ A personal baby registry app — guests browse a gift list, claim what they want
 
 ## How it works
 
-### Public registry (`/`)
+### Landing page (`/`)
+Guests land on a welcome page with two choices: **RSVP** (`/rsvp`) or **Baby Registry** (`/baby-registry`).
+
+### RSVP (`/rsvp`)
+- Guests enter their name, email, and number of people, then submit
+- If that email has already RSVP'd, the form pulls up the existing RSVP ("You've already RSVP'd — X people") and offers a **Change** flow to update the head count
+- Each new or updated RSVP triggers a confirmation email sent from a personal Gmail account (via nodemailer) containing the event details — venue name, address, time, and attire for men/women — all driven by environment variables
+- RSVPs are stored in the same DynamoDB table under a `RSVP#<email>` partition key
+
+### Public registry (`/baby-registry`)
 - Guests browse a pastel grid of registry items with photos, prices, and store links
 - They add items to a **My Gifts** list, then confirm with their name and a message
 - The grid auto-refreshes every 6 seconds so availability is always current
@@ -39,14 +48,22 @@ Password-protected dashboard to manage the registry:
 
 ```
 app/
-  page.tsx                    Public registry page (SSR shell)
+  page.tsx                    Landing page — choose RSVP or Baby Registry
+  baby-registry/page.tsx      Public registry page (SSR shell)
   RegistryClient.tsx          Gift grid, tray, checkout flow (client)
+  rsvp/
+    page.tsx                  RSVP page (SSR shell)
+    RsvpClient.tsx            RSVP form + already-RSVP'd / change flow (client)
   admin/
     page.tsx                  Admin page (SSR auth check)
     AdminClient.tsx           Add / edit / bulk-add / manage items (client)
     login/page.tsx            Login form
+    report/                   Baby Registry Report
+    rsvp-report/              RSVP Report (table, totals, CSV export, print)
   api/
     items/route.ts            GET  — public item listing
+    rsvp/route.ts             GET  — look up RSVP by email
+                              POST — create/update RSVP + send confirmation email
     reserve/route.ts          POST — claim a slot (creates a hold)
     release/route.ts          POST — release a single hold
     release-all/route.ts      POST — batch-release holds (used on page unload)
@@ -58,11 +75,14 @@ app/
       items/route.ts          GET/POST — list items / create item
       items/[id]/route.ts     PATCH/DELETE — update / delete item
       items/[id]/actions/     POST — markPurchased, removeSlot, clearAll
+      rsvps/route.ts          GET  — list all RSVPs (RSVP report)
       og/route.ts             POST — fetch product metadata from a URL
       upload-url/route.ts     POST — get presigned S3 upload URL
 
 lib/
   db.ts        DynamoDB access + atomic slot-based holds/claims
+  rsvp.ts      RSVP storage (same DynamoDB table, RSVP#<email> keys)
+  email.ts     RSVP confirmation emails via Gmail (nodemailer)
   s3.ts        Presigned upload / read URLs
   auth.ts      Signed-cookie admin session
   og.ts        Product info fetcher (Open Graph / JSON-LD / retailer parsing)
@@ -107,6 +127,8 @@ npm install
 
 Creates a DynamoDB table, private S3 bucket (with TTL + CORS), a scoped IAM user, and writes a ready-to-go `.env.local`. The generated admin password is printed at the end.
 
+> **RSVP note:** RSVPs live in the *same* DynamoDB table (`RSVP#<email>` keys), so there is **no extra table, migration, or seed script** — if the registry table already exists, RSVP works out of the box. Only the Gmail + event env vars below are needed for the confirmation emails.
+
 To set your own credentials upfront:
 
 ```bash
@@ -120,6 +142,15 @@ npm run dev    # http://localhost:3000
 ```
 
 Admin at `http://localhost:3000/admin`.
+
+### 3b. RSVP emails (Gmail)
+
+1. Turn on 2-Step Verification for your Google account (required for app passwords).
+2. Create an **App Password** at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) — pick "Mail", copy the 16-character password.
+3. Set `GMAIL_USER` and `GMAIL_APP_PASSWORD` in `.env.local` (and in Vercel for production).
+4. Fill in the event detail vars (`EVENT_NAME`, `VENUE_NAME`, `VENUE_ADDRESS`, `EVENT_TIME`, `ATTIRE_MEN`, `ATTIRE_WOMEN`) — blank ones are simply left out of the email.
+
+If the Gmail vars are missing, RSVPs still save; only the email is skipped.
 
 ### 4. Push to GitHub
 
@@ -163,6 +194,16 @@ The project deploys automatically on every push to `main` via GitHub Actions (`.
 | `NEXT_PUBLIC_REGISTRY_SUBTITLE` | ✓ | Subtitle, e.g. `We're having a baby!` |
 | `NEXT_PUBLIC_TAX_MULTIPLIER` | | Tax on displayed prices: `1.13` = 13%, `1` = none (default `1.13`) |
 | `HOLD_TTL_SECONDS` | | How long a hold lasts before auto-expiring (default `1800` = 30 min) |
+| `GMAIL_USER` | ✓ (for RSVP email) | Gmail address the confirmation emails are sent from |
+| `GMAIL_APP_PASSWORD` | ✓ (for RSVP email) | Gmail **App Password** (myaccount.google.com/apppasswords), not the regular password |
+| `EVENT_NAME` | | Event name in the RSVP email (default `Baby Shower`) |
+| `VENUE_NAME` | | Venue name shown in the RSVP email |
+| `VENUE_ADDRESS` | | Venue address shown in the RSVP email |
+| `EVENT_TIME` | | Event date/time shown in the RSVP email |
+| `ATTIRE_MEN` | | Attire guidance for men shown in the RSVP email |
+| `ATTIRE_WOMEN` | | Attire guidance for women shown in the RSVP email |
+
+If `GMAIL_USER` / `GMAIL_APP_PASSWORD` are unset, RSVPs still save — the email is just skipped (logged as a warning). Blank event-detail variables are omitted from the email.
 
 Copy `.env.local.example` to `.env.local` for local development.
 

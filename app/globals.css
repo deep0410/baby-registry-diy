@@ -15,6 +15,45 @@
 
 * { box-sizing: border-box; }
 
+/* ─────────────── Landing page ─────────────── */
+.landing { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding-bottom: 60px; }
+.landing-cards {
+  display: flex; gap: 24px; justify-content: center; flex-wrap: wrap;
+  max-width: 780px; margin: 26px auto 0; padding: 0 20px;
+}
+.landing-card {
+  flex: 1 1 300px; max-width: 350px; text-decoration: none;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 34px 28px; text-align: center;
+  transition: transform .15s ease, box-shadow .15s ease;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.landing-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(120, 100, 90, 0.14); }
+.landing-card h2 { margin: 0; font-size: 32px; }
+.landing-card p { margin: 0 0 14px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.landing-emoji { font-size: 40px; }
+.landing-card .btn { margin-top: auto; }
+
+/* ─────────────── RSVP page ─────────────── */
+.rsvp-wrap { max-width: 480px; margin: 0 auto; padding: 0 20px 80px; }
+.rsvp-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 28px;
+}
+.rsvp-card label { display: block; font-weight: 700; font-size: 13px; margin: 16px 0 6px; }
+.rsvp-card label:first-of-type { margin-top: 0; }
+.rsvp-card input {
+  width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 12px;
+  font: inherit; background: var(--bg); color: var(--ink);
+}
+.rsvp-card input:focus { outline: none; border-color: var(--accent); }
+.rsvp-msg { border-radius: 12px; padding: 14px 16px; font-size: 14px; margin-bottom: 16px; line-height: 1.5; }
+.rsvp-msg.info { background: var(--soft); }
+.rsvp-msg.ok { background: #e4efe0; color: #4e6a44; }
+.rsvp-msg.err { background: #f6e6e6; color: var(--accent-deep); }
+.rsvp-back { display: inline-block; margin: 26px 0 18px; font-size: 14px; color: var(--muted); text-decoration: none; }
+.rsvp-back:hover { color: var(--ink); }
+
 html, body {
   margin: 0;
   padding: 0;

@@ -261,7 +261,7 @@ export default function ReportClient() {
     <div className="admin-wrap">
       {/* ── Header ── */}
       <div className="admin-top">
-        <h1 className="serif">Registry Report</h1>
+        <h1 className="serif">Baby Registry Report</h1>
         <div className="row" style={{ flex: "none", gap: 8 }}>
           <button
             className="btn small"
@@ -275,8 +275,9 @@ export default function ReportClient() {
           >
             🖨️ Print thank-you list{selectedBuyers.size > 0 ? ` (${buyerLabel})` : ""}
           </button>
+          <a className="btn ghost small" href="/admin/rsvp-report">RSVP Report</a>
           <a className="btn ghost small" href="/admin">← Admin</a>
-          <a className="btn ghost small" href="/" target="_blank" rel="noreferrer">
+          <a className="btn ghost small" href="/baby-registry" target="_blank" rel="noreferrer">
             View public site ↗
           </a>
         </div>
